@@ -1,6 +1,6 @@
-import React from 'react';
-import Home from './pages/Home';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from "@/components/ui/sonner";
+import React from "react";
+import Home from "./pages/Home";
 
 function App() {
   return (

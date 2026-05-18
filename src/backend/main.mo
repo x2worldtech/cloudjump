@@ -1,23 +1,22 @@
-import OrderedMap "mo:base/OrderedMap";
-import Text "mo:base/Text";
-import Iter "mo:base/Iter";
-import Principal "mo:base/Principal";
-import Debug "mo:base/Debug";
-import Nat "mo:base/Nat";
-import Time "mo:base/Time";
-import List "mo:base/List";
-import Array "mo:base/Array";
-import Int "mo:base/Int";
+import Map "mo:core/Map";
+import List "mo:core/List";
+import Text "mo:core/Text";
+import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
+import Time "mo:core/Time";
+import Array "mo:core/Array";
+import Iter "mo:core/Iter";
 
-import AccessControl "authorization/access-control";
+import AccessControl "mo:caffeineai-authorization/access-control";
+import Migration "migration";
+import MixinAuthorization "mo:caffeineai-authorization/MixinAuthorization";
 
-persistent actor {
-    transient let textMap = OrderedMap.Make<Text>(Text.compare);
-    transient let principalMap = OrderedMap.Make<Principal>(Principal.compare);
+(with migration = Migration.run)
+actor {
 
-    var highScores = textMap.empty<Nat>();
-    var userProgress = principalMap.empty<UserProgress>();
-    var userProfiles = principalMap.empty<UserProfile>();
+    var highScores = Map.empty<Text, Nat>();
+    var userProgress = Map.empty<Principal, UserProgress>();
+    var userProfiles = Map.empty<Principal, UserProfile>();
 
     // Global statistics variables
     var totalPlayers = 0;
@@ -26,15 +25,15 @@ persistent actor {
     var totalHeightReached = 0;
     var globalStatsInitialized = false;
 
-    // Map to track unique authenticated players (simulating a set)
-    var uniquePlayers = principalMap.empty<()>();
+    // Track unique authenticated players
+    var uniquePlayers = Map.empty<Principal, ()>();
 
     // Chat messages storage
-    var chatMessages : List.List<ChatMessage> = List.nil<ChatMessage>();
+    var chatMessages = List.empty<ChatMessage>();
 
     // Clan system
-    var clans = textMap.empty<Clan>();
-    var userClans = principalMap.empty<Text>();
+    var clans = Map.empty<Text, Clan>();
+    var userClans = Map.empty<Principal, Text>();
 
     type UserProgress = {
         xp : Nat;
@@ -87,34 +86,31 @@ persistent actor {
     };
 
     let accessControlState = AccessControl.initState();
+    include MixinAuthorization(accessControlState);
 
-    // Initialize access control - first caller becomes admin, increments player count
+    // Initialize access control - first caller becomes admin
     // Only authenticated users can initialize
     public shared ({ caller }) func initializeAccessControl() : async () {
-        // Anonymous users cannot initialize access control
-        if (Principal.isAnonymous(caller)) {
-            return; // Silently return without initializing
+        if (caller.isAnonymous()) {
+            return;
         };
 
         AccessControl.initialize(accessControlState, caller);
 
-        // Set global stats as initialized
         globalStatsInitialized := true;
 
-        // Only add to totalPlayers if the caller is not already in the map
-        if (not principalMap.contains(uniquePlayers, caller)) {
-            uniquePlayers := principalMap.put(uniquePlayers, caller, ());
+        if (not uniquePlayers.containsKey(caller)) {
+            uniquePlayers.add(caller, ());
             totalPlayers += 1;
         };
 
-        // Set join date for new users
-        switch (principalMap.get(userProfiles, caller)) {
+        switch (userProfiles.get(caller)) {
             case null {
                 let newProfile : UserProfile = {
                     name = "";
                     joinedAt = Time.now();
                 };
-                userProfiles := principalMap.put(userProfiles, caller, newProfile);
+                userProfiles.add(caller, newProfile);
             };
             case (?profile) {
                 if (profile.joinedAt == 0) {
@@ -122,53 +118,38 @@ persistent actor {
                         profile with
                         joinedAt = Time.now();
                     };
-                    userProfiles := principalMap.put(userProfiles, caller, updatedProfile);
+                    userProfiles.add(caller, updatedProfile);
                 };
             };
         };
     };
 
-    public query ({ caller }) func getCallerUserRole() : async AccessControl.UserRole {
-        AccessControl.getUserRole(accessControlState, caller);
-    };
-
-    public shared ({ caller }) func assignCallerUserRole(user : Principal, role : AccessControl.UserRole) : async () {
-        // Admin-only check happens inside AccessControl.assignRole
-        AccessControl.assignRole(accessControlState, caller, user, role);
-    };
-
-    public query ({ caller }) func isCallerAdmin() : async Bool {
-        AccessControl.isAdmin(accessControlState, caller);
-    };
-
     // High scores can be viewed by anyone (including guests for leaderboard display)
     public query func getHighScores() : async [(Text, Nat)] {
-        // No authorization check - public access for leaderboard display
-        Iter.toArray(textMap.entries(highScores));
+        highScores.toArray();
     };
 
     // Only authenticated users can submit scores
     public shared ({ caller }) func submitScore(playerName : Text, score : Nat) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can submit scores");
+            Runtime.trap("Unauthorized: Only authenticated users can submit scores");
         };
 
-        highScores := textMap.put(highScores, playerName, score);
+        highScores.add(playerName, score);
     };
 
     // Only authenticated users can submit progress (height-based XP)
     public shared ({ caller }) func submitProgress(height : Nat) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can submit progress");
+            Runtime.trap("Unauthorized: Only authenticated users can submit progress");
         };
 
-        // Track unique authenticated players for totalPlayers count
-        if (not principalMap.contains(uniquePlayers, caller)) {
-            uniquePlayers := principalMap.put(uniquePlayers, caller, ());
+        if (not uniquePlayers.containsKey(caller)) {
+            uniquePlayers.add(caller, ());
             totalPlayers += 1;
         };
 
-        let currentProgress = switch (principalMap.get(userProgress, caller)) {
+        let currentProgress = switch (userProgress.get(caller)) {
             case null {
                 {
                     xp = 0;
@@ -181,16 +162,13 @@ persistent actor {
             case (?progress) { progress };
         };
 
-        // Height directly determines XP gained (1 height unit = 1 XP)
         let newXp = currentProgress.xp + height;
         let newLevel = calculateLevel(newXp);
         let newHighestHeight = if (height > currentProgress.highestHeight) height else currentProgress.highestHeight;
 
-        // Calculate Clouds based on cumulative height (1 Cloud per 2500 height points)
         let totalHeight = currentProgress.xp + height;
         let newClouds = totalHeight / 2500;
 
-        // Calculate Prestige based on XP and level
         let newPrestige = calculatePrestige(newXp, newLevel);
 
         let updatedProgress = {
@@ -201,22 +179,21 @@ persistent actor {
             prestige = newPrestige;
         };
 
-        userProgress := principalMap.put(userProgress, caller, updatedProgress);
+        userProgress.add(caller, updatedProgress);
 
         // Update clan height if user is in a clan
-        switch (principalMap.get(userClans, caller)) {
+        switch (userClans.get(caller)) {
             case null {};
             case (?clanName) {
-                switch (textMap.get(clans, clanName)) {
+                switch (clans.get(clanName)) {
                     case null {};
                     case (?clan) {
-                        let updatedMembers = clan.members;
-                        let updatedTotalHeight = calculateClanTotalHeight(updatedMembers);
+                        let updatedTotalHeight = calculateClanTotalHeight(clan.members);
                         let updatedClan = {
                             clan with
                             totalHeight = updatedTotalHeight;
                         };
-                        clans := textMap.put(clans, clanName, updatedClan);
+                        clans.add(clanName, updatedClan);
                     };
                 };
             };
@@ -226,69 +203,63 @@ persistent actor {
     // Only authenticated users can view their own progress
     public query ({ caller }) func getCallerProgress() : async ?UserProgress {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view progress");
+            Runtime.trap("Unauthorized: Only authenticated users can view progress");
         };
 
-        principalMap.get(userProgress, caller);
+        userProgress.get(caller);
     };
 
     // Users can view their own progress, admins can view any user's progress
     public query ({ caller }) func getUserProgress(user : Principal) : async ?UserProgress {
         if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-            Debug.trap("Unauthorized: Can only view your own progress or must be admin");
+            Runtime.trap("Unauthorized: Can only view your own progress or must be admin");
         };
 
-        principalMap.get(userProgress, user);
+        userProgress.get(user);
     };
 
     // Only authenticated users can view their own profile
     public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view profiles");
+            Runtime.trap("Unauthorized: Only authenticated users can view profiles");
         };
 
-        principalMap.get(userProfiles, caller);
+        userProfiles.get(caller);
     };
 
     // Only authenticated users can save their profile
     public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can save profiles");
+            Runtime.trap("Unauthorized: Only authenticated users can save profiles");
         };
 
-        // Track unique authenticated players for totalPlayers count
-        if (not principalMap.contains(uniquePlayers, caller)) {
-            uniquePlayers := principalMap.put(uniquePlayers, caller, ());
+        if (not uniquePlayers.containsKey(caller)) {
+            uniquePlayers.add(caller, ());
             totalPlayers += 1;
         };
 
-        // Set join date if not already set
         let profileWithJoinDate = if (profile.joinedAt == 0) {
             { profile with joinedAt = Time.now() };
         } else {
             profile;
         };
 
-        userProfiles := principalMap.put(userProfiles, caller, profileWithJoinDate);
+        userProfiles.add(caller, profileWithJoinDate);
     };
 
     // Authenticated users can view any user's profile (for Player Stats Modal)
-    // This is used in Chat, Clan, and Leaderboard modals to display player information
     public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view profiles");
+            Runtime.trap("Unauthorized: Only authenticated users can view profiles");
         };
 
-        principalMap.get(userProfiles, user);
+        userProfiles.get(user);
     };
 
-    // Global statistics methods
-
     // Batch update global statistics - called at the end of each game session
-    // Only authenticated users can update global statistics to prevent abuse
     public shared ({ caller }) func updateGlobalStatistics(jumps : Nat, games : Nat, height : Nat) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can update global statistics");
+            Runtime.trap("Unauthorized: Only authenticated users can update global statistics");
         };
 
         totalJumps += jumps;
@@ -298,11 +269,7 @@ persistent actor {
     };
 
     // Get global statistics - public read access for display on home page
-    // Accessible by everyone including guests
-    // Returns default values if not initialized to prevent blocking the UI
     public query func getGlobalStatistics() : async GlobalStatistics {
-        // No authorization check - public statistics visible to everyone including guests
-
         {
             totalPlayers;
             totalJumps;
@@ -362,7 +329,7 @@ persistent actor {
     // Send a chat message - only authenticated users can send messages
     public shared ({ caller }) func sendChatMessage(content : Text) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can send chat messages");
+            Runtime.trap("Unauthorized: Only authenticated users can send chat messages");
         };
 
         let message : ChatMessage = {
@@ -371,21 +338,21 @@ persistent actor {
             timestamp = Time.now();
         };
 
-        chatMessages := List.push(message, chatMessages);
+        chatMessages.add(message);
 
-        if (List.size(chatMessages) > 50) {
-            chatMessages := List.take(chatMessages, 50);
+        // Keep only last 50 messages
+        if (chatMessages.size() > 50) {
+            chatMessages.truncate(50);
         };
     };
 
     // Get recent chat messages - only authenticated users can view messages
     public query ({ caller }) func getRecentChatMessages() : async [ChatMessage] {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view chat messages");
+            Runtime.trap("Unauthorized: Only authenticated users can view chat messages");
         };
 
-        let messagesArray = List.toArray(chatMessages);
-        Array.reverse(messagesArray);
+        chatMessages.reverse().toArray();
     };
 
     // Clan System
@@ -393,15 +360,15 @@ persistent actor {
     // Create a new clan - only authenticated users can create clans
     public shared ({ caller }) func createClan(clanName : Text) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can create clans");
+            Runtime.trap("Unauthorized: Only authenticated users can create clans");
         };
 
-        if (textMap.contains(clans, clanName)) {
-            Debug.trap("Clan name already exists");
+        if (clans.containsKey(clanName)) {
+            Runtime.trap("Clan name already exists");
         };
 
-        if (principalMap.contains(userClans, caller)) {
-            Debug.trap("User is already in a clan");
+        if (userClans.containsKey(caller)) {
+            Runtime.trap("User is already in a clan");
         };
 
         let newClan : Clan = {
@@ -411,37 +378,37 @@ persistent actor {
             totalHeight = 0;
         };
 
-        clans := textMap.put(clans, clanName, newClan);
-        userClans := principalMap.put(userClans, caller, clanName);
+        clans.add(clanName, newClan);
+        userClans.add(caller, clanName);
     };
 
     // Join an existing clan - only authenticated users can join clans
     public shared ({ caller }) func joinClan(clanName : Text) : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can join clans");
+            Runtime.trap("Unauthorized: Only authenticated users can join clans");
         };
 
-        if (principalMap.contains(userClans, caller)) {
-            Debug.trap("User is already in a clan");
+        if (userClans.containsKey(caller)) {
+            Runtime.trap("User is already in a clan");
         };
 
-        switch (textMap.get(clans, clanName)) {
+        switch (clans.get(clanName)) {
             case null {
-                Debug.trap("Clan not found");
+                Runtime.trap("Clan not found");
             };
             case (?clan) {
                 if (clan.members.size() >= 50) {
-                    Debug.trap("Clan is full");
+                    Runtime.trap("Clan is full");
                 };
 
-                let updatedMembers = Array.append(clan.members, [caller]);
+                let updatedMembers = clan.members.concat([caller]);
                 let updatedClan = {
                     clan with
                     members = updatedMembers;
                 };
 
-                clans := textMap.put(clans, clanName, updatedClan);
-                userClans := principalMap.put(userClans, caller, clanName);
+                clans.add(clanName, updatedClan);
+                userClans.add(caller, clanName);
             };
         };
     };
@@ -449,35 +416,34 @@ persistent actor {
     // Leave a clan - only authenticated users can leave clans
     public shared ({ caller }) func leaveClan() : async () {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can leave clans");
+            Runtime.trap("Unauthorized: Only authenticated users can leave clans");
         };
 
-        switch (principalMap.get(userClans, caller)) {
+        switch (userClans.get(caller)) {
             case null {
-                Debug.trap("User is not in a clan");
+                Runtime.trap("User is not in a clan");
             };
             case (?clanName) {
-                switch (textMap.get(clans, clanName)) {
+                switch (clans.get(clanName)) {
                     case null {
-                        Debug.trap("Clan not found");
+                        Runtime.trap("Clan not found");
                     };
                     case (?clan) {
-                        let updatedMembers = Array.filter<Principal>(
-                            clan.members,
-                            func(member) { member != caller },
+                        let updatedMembers = clan.members.filter(
+                            func(member : Principal) : Bool { member != caller }
                         );
 
                         if (updatedMembers.size() == 0) {
-                            clans := textMap.delete(clans, clanName);
+                            clans.remove(clanName);
                         } else {
                             let updatedClan = {
                                 clan with
                                 members = updatedMembers;
                             };
-                            clans := textMap.put(clans, clanName, updatedClan);
+                            clans.add(clanName, updatedClan);
                         };
 
-                        userClans := principalMap.delete(userClans, caller);
+                        userClans.remove(caller);
                     };
                 };
             };
@@ -485,52 +451,49 @@ persistent actor {
     };
 
     // Get clan info - only authenticated users can view clan information
-    // Clan features are "Authenticated Users Only" per specification
     public query ({ caller }) func getClanInfo(clanName : Text) : async ?Clan {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view clan information");
+            Runtime.trap("Unauthorized: Only authenticated users can view clan information");
         };
 
-        textMap.get(clans, clanName);
+        clans.get(clanName);
     };
 
     // Get user's clan info - only authenticated users can view their own clan
     public query ({ caller }) func getCallerClanInfo() : async ?Clan {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view clan info");
+            Runtime.trap("Unauthorized: Only authenticated users can view clan info");
         };
 
-        switch (principalMap.get(userClans, caller)) {
+        switch (userClans.get(caller)) {
             case null { null };
             case (?clanName) {
-                textMap.get(clans, clanName);
+                clans.get(clanName);
             };
         };
     };
 
     // Get global clan leaderboard - only authenticated users can view
-    // Clan features are "Authenticated Users Only" per specification
     public query ({ caller }) func getClanLeaderboard() : async [Clan] {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view clan leaderboard");
+            Runtime.trap("Unauthorized: Only authenticated users can view clan leaderboard");
         };
 
-        let clansArray = Iter.toArray(textMap.vals(clans));
-        Array.sort<Clan>(
-            clansArray,
-            func(a, b) {
+        let clansArray = clans.values().toArray();
+        clansArray.sort(
+            func(a : Clan, b : Clan) : { #less; #equal; #greater } {
                 if (a.totalHeight > b.totalHeight) { #less } else if (a.totalHeight < b.totalHeight) {
                     #greater;
                 } else { #equal };
-            },
+            }
         );
     };
 
     // Helper function to calculate total height of clan members
     func calculateClanTotalHeight(members : [Principal]) : Nat {
         var totalHeight = 0;
-        for (member in members.vals()) {
-            switch (principalMap.get(userProgress, member)) {
+        for (member in members.values()) {
+            switch (userProgress.get(member)) {
                 case null {};
                 case (?progress) {
                     totalHeight += progress.highestHeight;
@@ -541,15 +504,10 @@ persistent actor {
     };
 
     // Global Leaderboard - Public Access
-    // Per specification: "Global leaderboard displays all Internet Identity users...
-    // visible across all canister instances" - accessible to everyone including guests
     public query func getGlobalLeaderboard() : async [LeaderboardEntry] {
-        // No authorization check - public access for global leaderboard display
+        let progressEntries = userProgress.entries().toArray();
 
-        let progressEntries = Iter.toArray(principalMap.entries(userProgress));
-
-        let leaderboardEntries = Array.map<(Principal, UserProgress), LeaderboardEntry>(
-            progressEntries,
+        let leaderboardEntries = progressEntries.map(
             func((principal, progress)) {
                 {
                     principal;
@@ -557,29 +515,26 @@ persistent actor {
                     level = progress.level;
                     prestige = progress.prestige;
                 };
-            },
+            }
         );
 
-        Array.sort<LeaderboardEntry>(
-            leaderboardEntries,
-            func(a, b) {
+        leaderboardEntries.sort(
+            func(a : LeaderboardEntry, b : LeaderboardEntry) : { #less; #equal; #greater } {
                 if (a.highestScore > b.highestScore) { #less } else if (a.highestScore < b.highestScore) {
                     #greater;
                 } else { #equal };
-            },
+            }
         );
     };
 
     // Player Statistics - Only authenticated users can view player stats
-    // This is accessed from Chat, Clan, and Leaderboard modals which are all authenticated-only
-    // Returns combined progress and profile data including join date
     public query ({ caller }) func getPlayerStats(principal : Principal) : async ?PlayerStats {
         if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-            Debug.trap("Unauthorized: Only authenticated users can view player statistics");
+            Runtime.trap("Unauthorized: Only authenticated users can view player statistics");
         };
 
-        let progress = principalMap.get(userProgress, principal);
-        let profile = principalMap.get(userProfiles, principal);
+        let progress = userProgress.get(principal);
+        let profile = userProfiles.get(principal);
 
         switch (progress, profile) {
             case (?prog, ?prof) {

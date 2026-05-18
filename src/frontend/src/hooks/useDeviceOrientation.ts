@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
 interface DeviceOrientationState {
   tiltX: number; // -1 to 1, where -1 is left tilt, 1 is right tilt
@@ -22,10 +22,10 @@ export function useDeviceOrientation(enabled: boolean) {
 
   useEffect(() => {
     // Check if DeviceOrientation API is supported
-    const isSupported = 'DeviceOrientationEvent' in window;
-    
+    const isSupported = "DeviceOrientationEvent" in window;
+
     if (!isSupported || !enabled) {
-      setState(prev => ({ ...prev, isSupported }));
+      setState((prev) => ({ ...prev, isSupported }));
       return;
     }
 
@@ -47,20 +47,24 @@ export function useDeviceOrientation(enabled: boolean) {
       if (Math.abs(gamma) > TILT_THRESHOLD) {
         // Map gamma to -1 to 1 range with sensitivity curve
         const adjustedGamma = gamma - Math.sign(gamma) * TILT_THRESHOLD;
-        normalizedTilt = Math.max(-1, Math.min(1, adjustedGamma / (MAX_TILT - TILT_THRESHOLD)));
-        
+        normalizedTilt = Math.max(
+          -1,
+          Math.min(1, adjustedGamma / (MAX_TILT - TILT_THRESHOLD)),
+        );
+
         // Apply easing curve for more natural feel
-        normalizedTilt = Math.sign(normalizedTilt) * Math.pow(Math.abs(normalizedTilt), 0.8);
+        normalizedTilt =
+          Math.sign(normalizedTilt) * Math.abs(normalizedTilt) ** 0.8;
       }
 
       // Smooth the tilt value to reduce jitter
-      smoothedTiltRef.current = 
-        smoothedTiltRef.current * (1 - SMOOTHING_FACTOR) + 
+      smoothedTiltRef.current =
+        smoothedTiltRef.current * (1 - SMOOTHING_FACTOR) +
         normalizedTilt * SMOOTHING_FACTOR;
 
       lastGammaRef.current = gamma;
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         tiltX: smoothedTiltRef.current,
         permissionGranted: true,
@@ -69,27 +73,42 @@ export function useDeviceOrientation(enabled: boolean) {
 
     // Request permission for iOS 13+
     const requestPermission = async () => {
-      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      if (
+        typeof (DeviceOrientationEvent as any).requestPermission === "function"
+      ) {
         try {
-          const permission = await (DeviceOrientationEvent as any).requestPermission();
-          if (permission === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation);
-            setState(prev => ({ ...prev, isSupported: true, permissionGranted: true }));
+          const permission = await (
+            DeviceOrientationEvent as any
+          ).requestPermission();
+          if (permission === "granted") {
+            window.addEventListener("deviceorientation", handleOrientation);
+            setState((prev) => ({
+              ...prev,
+              isSupported: true,
+              permissionGranted: true,
+            }));
           }
         } catch (error) {
-          console.error('Error requesting device orientation permission:', error);
+          console.error(
+            "Error requesting device orientation permission:",
+            error,
+          );
         }
       } else {
         // Non-iOS devices or older iOS versions
-        window.addEventListener('deviceorientation', handleOrientation);
-        setState(prev => ({ ...prev, isSupported: true, permissionGranted: true }));
+        window.addEventListener("deviceorientation", handleOrientation);
+        setState((prev) => ({
+          ...prev,
+          isSupported: true,
+          permissionGranted: true,
+        }));
       }
     };
 
     requestPermission();
 
     return () => {
-      window.removeEventListener('deviceorientation', handleOrientation);
+      window.removeEventListener("deviceorientation", handleOrientation);
     };
   }, [enabled]);
 
@@ -98,9 +117,14 @@ export function useDeviceOrientation(enabled: boolean) {
 
 export function isMobileDevice(): boolean {
   // Check user agent for mobile devices
-  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-  
-  return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase()) ||
+  const userAgent =
+    navigator.userAgent || navigator.vendor || (window as any).opera;
+
+  return (
+    /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+      userAgent.toLowerCase(),
+    ) ||
     // Also check for touch support and small screen
-    ('ontouchstart' in window && window.innerWidth < 1024);
+    ("ontouchstart" in window && window.innerWidth < 1024)
+  );
 }

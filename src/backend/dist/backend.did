@@ -1,0 +1,86 @@
+type UserRole = 
+ variant {
+   admin;
+   guest;
+   user;
+ };
+type UserProgress = 
+ record {
+   clouds: nat;
+   highestHeight: nat;
+   level: nat;
+   prestige: nat;
+   xp: nat;
+ };
+type UserProfile = 
+ record {
+   joinedAt: int;
+   name: text;
+ };
+type PlayerStats = 
+ record {
+   clouds: nat;
+   highestHeight: nat;
+   joinedAt: int;
+   level: nat;
+   prestige: nat;
+   "principal": principal;
+   xp: nat;
+ };
+type LeaderboardEntry = 
+ record {
+   highestScore: nat;
+   level: nat;
+   prestige: nat;
+   "principal": principal;
+ };
+type GlobalStatistics = 
+ record {
+   totalGamesPlayed: nat;
+   totalHeightReached: nat;
+   totalJumps: nat;
+   totalPlayers: nat;
+ };
+type Clan = 
+ record {
+   members: vec principal;
+   name: text;
+   owner: principal;
+   totalHeight: nat;
+ };
+type ChatMessage = 
+ record {
+   content: text;
+   sender: principal;
+   timestamp: int;
+ };
+service : {
+  _initializeAccessControl: () -> ();
+  assignCallerUserRole: (user: principal, role: UserRole) -> ();
+  createClan: (clanName: text) -> ();
+  getCallerClanInfo: () -> (opt Clan) query;
+  getCallerProgress: () -> (opt UserProgress) query;
+  getCallerUserProfile: () -> (opt UserProfile) query;
+  getCallerUserRole: () -> (UserRole) query;
+  getClanInfo: (clanName: text) -> (opt Clan) query;
+  getClanLeaderboard: () -> (vec Clan) query;
+  getGlobalLeaderboard: () -> (vec LeaderboardEntry) query;
+  getGlobalStatistics: () -> (GlobalStatistics) query;
+  getHighScores: () -> (vec record {
+                              text;
+                              nat;
+                            }) query;
+  getPlayerStats: ("principal": principal) -> (opt PlayerStats) query;
+  getRecentChatMessages: () -> (vec ChatMessage) query;
+  getUserProfile: (user: principal) -> (opt UserProfile) query;
+  getUserProgress: (user: principal) -> (opt UserProgress) query;
+  initializeAccessControl: () -> ();
+  isCallerAdmin: () -> (bool) query;
+  joinClan: (clanName: text) -> ();
+  leaveClan: () -> ();
+  saveCallerUserProfile: (profile: UserProfile) -> ();
+  sendChatMessage: (content: text) -> ();
+  submitProgress: (height: nat) -> ();
+  submitScore: (playerName: text, score: nat) -> ();
+  updateGlobalStatistics: (jumps: nat, games: nat, height: nat) -> ();
+}

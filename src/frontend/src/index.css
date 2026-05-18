@@ -3,253 +3,399 @@
 @tailwind utilities;
 
 @layer base {
-    :root {
-        --radius: 0.625rem;
-        --background: 0.98 0.02 220;
-        --foreground: 0.2 0.05 230;
-        --card: 1 0 0;
-        --card-foreground: 0.2 0.05 230;
-        --popover: 1 0 0;
-        --popover-foreground: 0.2 0.05 230;
-        --primary: 0.55 0.15 230;
-        --primary-foreground: 0.98 0.02 220;
-        --secondary: 0.95 0.02 220;
-        --secondary-foreground: 0.2 0.05 230;
-        --muted: 0.95 0.02 220;
-        --muted-foreground: 0.5 0.03 230;
-        --accent: 0.92 0.03 220;
-        --accent-foreground: 0.2 0.05 230;
-        --destructive: 0.577 0.245 27.325;
-        --destructive-foreground: 0.98 0.02 220;
-        --border: 0.88 0.03 220;
-        --input: 0.88 0.03 220;
-        --ring: 0.55 0.15 230;
-        --chart-1: 0.65 0.18 150;
-        --chart-2: 0.6 0.15 230;
-        --chart-3: 0.55 0.12 280;
-        --chart-4: 0.7 0.2 40;
-        --chart-5: 0.68 0.18 10;
-        --sidebar: 0.98 0.02 220;
-        --sidebar-foreground: 0.2 0.05 230;
-        --sidebar-primary: 0.55 0.15 230;
-        --sidebar-primary-foreground: 0.98 0.02 220;
-        --sidebar-accent: 0.95 0.02 220;
-        --sidebar-accent-foreground: 0.2 0.05 230;
-        --sidebar-border: 0.88 0.03 220;
-        --sidebar-ring: 0.55 0.15 230;
-    }
+  :root {
+    --radius: 0.625rem;
+    --background: 0.98 0.02 220;
+    --foreground: 0.2 0.05 230;
+    --card: 1 0 0;
+    --card-foreground: 0.2 0.05 230;
+    --popover: 1 0 0;
+    --popover-foreground: 0.2 0.05 230;
+    --primary: 0.55 0.15 230;
+    --primary-foreground: 0.98 0.02 220;
+    --secondary: 0.95 0.02 220;
+    --secondary-foreground: 0.2 0.05 230;
+    --muted: 0.95 0.02 220;
+    --muted-foreground: 0.5 0.03 230;
+    --accent: 0.92 0.03 220;
+    --accent-foreground: 0.2 0.05 230;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.98 0.02 220;
+    --border: 0.88 0.03 220;
+    --input: 0.88 0.03 220;
+    --ring: 0.55 0.15 230;
+    --chart-1: 0.65 0.18 150;
+    --chart-2: 0.6 0.15 230;
+    --chart-3: 0.55 0.12 280;
+    --chart-4: 0.7 0.2 40;
+    --chart-5: 0.68 0.18 10;
+    --sidebar: 0.98 0.02 220;
+    --sidebar-foreground: 0.2 0.05 230;
+    --sidebar-primary: 0.55 0.15 230;
+    --sidebar-primary-foreground: 0.98 0.02 220;
+    --sidebar-accent: 0.95 0.02 220;
+    --sidebar-accent-foreground: 0.2 0.05 230;
+    --sidebar-border: 0.88 0.03 220;
+    --sidebar-ring: 0.55 0.15 230;
+  }
 
-    .dark {
-        --background: 0.15 0.02 230;
-        --foreground: 0.98 0.02 220;
-        --card: 0.2 0.03 230;
-        --card-foreground: 0.98 0.02 220;
-        --popover: 0.18 0.03 230;
-        --popover-foreground: 0.98 0.02 220;
-        --primary: 0.65 0.18 230;
-        --primary-foreground: 0.15 0.02 230;
-        --secondary: 0.25 0.03 230;
-        --secondary-foreground: 0.98 0.02 220;
-        --muted: 0.25 0.03 230;
-        --muted-foreground: 0.65 0.03 220;
-        --accent: 0.3 0.04 230;
-        --accent-foreground: 0.98 0.02 220;
-        --destructive: 0.6 0.22 25;
-        --destructive-foreground: 0.98 0.02 220;
-        --border: 0.3 0.03 230;
-        --input: 0.3 0.03 230;
-        --ring: 0.65 0.18 230;
-        --chart-1: 0.65 0.18 150;
-        --chart-2: 0.6 0.15 230;
-        --chart-3: 0.55 0.12 280;
-        --chart-4: 0.7 0.2 40;
-        --chart-5: 0.68 0.18 10;
-        --sidebar: 0.2 0.03 230;
-        --sidebar-foreground: 0.98 0.02 220;
-        --sidebar-primary: 0.65 0.18 230;
-        --sidebar-primary-foreground: 0.15 0.02 230;
-        --sidebar-accent: 0.25 0.03 230;
-        --sidebar-accent-foreground: 0.98 0.02 220;
-        --sidebar-border: 0.3 0.03 230;
-        --sidebar-ring: 0.65 0.18 230;
-    }
+  .dark {
+    --background: 0.15 0.02 230;
+    --foreground: 0.98 0.02 220;
+    --card: 0.2 0.03 230;
+    --card-foreground: 0.98 0.02 220;
+    --popover: 0.18 0.03 230;
+    --popover-foreground: 0.98 0.02 220;
+    --primary: 0.65 0.18 230;
+    --primary-foreground: 0.15 0.02 230;
+    --secondary: 0.25 0.03 230;
+    --secondary-foreground: 0.98 0.02 220;
+    --muted: 0.25 0.03 230;
+    --muted-foreground: 0.65 0.03 220;
+    --accent: 0.3 0.04 230;
+    --accent-foreground: 0.98 0.02 220;
+    --destructive: 0.6 0.22 25;
+    --destructive-foreground: 0.98 0.02 220;
+    --border: 0.3 0.03 230;
+    --input: 0.3 0.03 230;
+    --ring: 0.65 0.18 230;
+    --chart-1: 0.65 0.18 150;
+    --chart-2: 0.6 0.15 230;
+    --chart-3: 0.55 0.12 280;
+    --chart-4: 0.7 0.2 40;
+    --chart-5: 0.68 0.18 10;
+    --sidebar: 0.2 0.03 230;
+    --sidebar-foreground: 0.98 0.02 220;
+    --sidebar-primary: 0.65 0.18 230;
+    --sidebar-primary-foreground: 0.15 0.02 230;
+    --sidebar-accent: 0.25 0.03 230;
+    --sidebar-accent-foreground: 0.98 0.02 220;
+    --sidebar-border: 0.3 0.03 230;
+    --sidebar-ring: 0.65 0.18 230;
+  }
 
-    * {
-        @apply border-border;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-        -webkit-touch-callout: none;
-        -webkit-tap-highlight-color: transparent;
-    }
+  * {
+    @apply border-border;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-    html,
-    body {
-        @apply bg-background text-foreground;
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        position: fixed;
-        touch-action: none;
-        overscroll-behavior: none;
-        -webkit-overflow-scrolling: touch;
-    }
+  html,
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
 
-    #root {
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        touch-action: none;
-    }
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+  }
 
-    canvas {
-        touch-action: none;
-        -webkit-user-drag: none;
-        -khtml-user-drag: none;
-        -moz-user-drag: none;
-        -o-user-drag: none;
-        user-drag: none;
-    }
+  canvas {
+    touch-action: none;
+    -webkit-user-drag: none;
+  }
 
-    button,
-    input,
-    textarea {
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-    }
+  button,
+  input,
+  textarea {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
 }
 
 @layer utilities {
-    /* Parallax cloud animations */
-    @keyframes float-slow {
-        0%, 100% {
-            transform: translateY(0) translateX(0);
-        }
-        50% {
-            transform: translateY(-20px) translateX(10px);
-        }
+  /* Parallax cloud animations */
+  @keyframes float-slow {
+    0%,
+    100% {
+      transform: translateY(0) translateX(0);
     }
+    50% {
+      transform: translateY(-20px) translateX(10px);
+    }
+  }
 
-    @keyframes float-medium {
-        0%, 100% {
-            transform: translateY(0) translateX(0);
-        }
-        50% {
-            transform: translateY(-15px) translateX(-8px);
-        }
+  @keyframes float-medium {
+    0%,
+    100% {
+      transform: translateY(0) translateX(0);
     }
+    50% {
+      transform: translateY(-15px) translateX(-8px);
+    }
+  }
 
-    @keyframes float-fast {
-        0%, 100% {
-            transform: translateY(0) translateX(0);
-        }
-        50% {
-            transform: translateY(-10px) translateX(12px);
-        }
+  @keyframes float-fast {
+    0%,
+    100% {
+      transform: translateY(0) translateX(0);
     }
+    50% {
+      transform: translateY(-10px) translateX(12px);
+    }
+  }
 
-    @keyframes bounce-gentle {
-        0%, 100% {
-            transform: translateY(0);
-        }
-        50% {
-            transform: translateY(-10px);
-        }
+  @keyframes bounce-gentle {
+    0%,
+    100% {
+      transform: translateY(0);
     }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
 
-    @keyframes bounce-gentle-delayed {
-        0%, 100% {
-            transform: translateY(0);
-        }
-        50% {
-            transform: translateY(-8px);
-        }
+  @keyframes bounce-gentle-delayed {
+    0%,
+    100% {
+      transform: translateY(0);
     }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
 
-    @keyframes fade-in-up {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
     }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
-    @keyframes slide-in-up {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+  @keyframes slide-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
     }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
-    @keyframes pulse-gentle {
-        0%, 100% {
-            opacity: 1;
-            transform: scale(1);
-        }
-        50% {
-            opacity: 0.95;
-            transform: scale(1.02);
-        }
+  @keyframes pulse-gentle {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
     }
+    50% {
+      opacity: 0.95;
+      transform: scale(1.02);
+    }
+  }
 
-    @keyframes ticker-glow {
-        0% {
-            transform: translateX(-100%);
-        }
-        100% {
-            transform: translateX(100%);
-        }
+  @keyframes ticker-glow {
+    0% {
+      transform: translateX(-100%);
     }
+    100% {
+      transform: translateX(100%);
+    }
+  }
 
-    .animate-float-slow {
-        animation: float-slow 20s ease-in-out infinite;
+  @keyframes combo-pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
     }
+    40% {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
 
-    .animate-float-medium {
-        animation: float-medium 15s ease-in-out infinite;
+  @keyframes character-float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-1deg);
     }
+    50% {
+      transform: translateY(-10px) rotate(1deg);
+    }
+  }
 
-    .animate-float-fast {
-        animation: float-fast 10s ease-in-out infinite;
+  @keyframes sparkle {
+    0%,
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0);
     }
+    50% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(var(--sparkle-scale, 1));
+    }
+  }
 
-    .animate-bounce-gentle {
-        animation: bounce-gentle 3s ease-in-out infinite;
+  @keyframes ping-slow {
+    0% {
+      transform: scale(1);
+      opacity: 1;
     }
+    75%,
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
 
-    .animate-bounce-gentle-delayed {
-        animation: bounce-gentle-delayed 3s ease-in-out infinite 0.5s;
+  @keyframes spin-very-slow {
+    from {
+      transform: rotate(0deg);
     }
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
-    .animate-fade-in-up {
-        animation: fade-in-up 0.8s ease-out;
+  @keyframes title-shimmer {
+    0% {
+      background-position: -150% 0;
     }
+    100% {
+      background-position: 250% 0;
+    }
+  }
 
-    .animate-slide-in-up {
-        animation: slide-in-up 0.6s ease-out;
+  @keyframes title-bob {
+    0%,
+    100% {
+      transform: translateY(0);
     }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
 
-    .animate-pulse-gentle {
-        animation: pulse-gentle 2s ease-in-out infinite;
-    }
+  .animate-float-slow {
+    animation: float-slow 20s ease-in-out infinite;
+  }
 
-    .animate-ticker-glow {
-        animation: ticker-glow 3s linear infinite;
-    }
+  .animate-float-medium {
+    animation: float-medium 15s ease-in-out infinite;
+  }
 
-    .bg-gradient-radial {
-        background: radial-gradient(circle, var(--tw-gradient-stops));
-    }
+  .animate-float-fast {
+    animation: float-fast 10s ease-in-out infinite;
+  }
+
+  .animate-bounce-gentle {
+    animation: bounce-gentle 3s ease-in-out infinite;
+  }
+
+  .animate-bounce-gentle-delayed {
+    animation: bounce-gentle-delayed 3s ease-in-out infinite 0.5s;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s ease-out;
+  }
+
+  .animate-slide-in-up {
+    animation: slide-in-up 0.6s ease-out;
+  }
+
+  .animate-pulse-gentle {
+    animation: pulse-gentle 2s ease-in-out infinite;
+  }
+
+  .animate-ticker-glow {
+    animation: ticker-glow 3s linear infinite;
+  }
+
+  .animate-combo-pop {
+    animation: combo-pop 0.35s cubic-bezier(0.2, 1.6, 0.3, 1);
+  }
+
+  .animate-character-float {
+    animation: character-float 4s ease-in-out infinite;
+  }
+
+  .animate-sparkle {
+    animation: sparkle 2.4s ease-in-out infinite;
+  }
+
+  .animate-ping-slow {
+    animation: ping-slow 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .animate-spin-very-slow {
+    animation: spin-very-slow 18s linear infinite;
+  }
+
+  .bg-gradient-radial {
+    background: radial-gradient(circle, var(--tw-gradient-stops));
+  }
+
+  /* ---- Cloud Jump cinematic title ----
+   * Layered approach:
+   *  - The <h1> itself has the gold gradient fill, dark text-stroke for
+   *    legibility, plus a moving white shimmer overlay.
+   *  - A data-text duplicate behind it (via ::before/::after) provides the
+   *    drop-shadow / depth.
+   */
+  .cloud-jump-title {
+    position: relative;
+    background-image: linear-gradient(
+      180deg,
+      #fff7c0 0%,
+      #ffdf75 35%,
+      #f4a83a 70%,
+      #c47118 100%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-stroke: 2px #1e293b;
+    paint-order: stroke fill;
+    filter: drop-shadow(0 6px 14px rgba(255, 180, 60, 0.45))
+      drop-shadow(0 2px 4px rgba(20, 30, 60, 0.5));
+    animation: title-bob 4s ease-in-out infinite;
+    letter-spacing: -0.02em;
+  }
+  .cloud-jump-title::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.85) 50%,
+      transparent 70%
+    );
+    background-size: 250% 100%;
+    background-position: -150% 0;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-stroke: 2px transparent;
+    pointer-events: none;
+    animation: title-shimmer 3.5s linear infinite;
+  }
 }

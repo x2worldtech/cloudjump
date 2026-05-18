@@ -1,0 +1,104 @@
+// Version: 3.0.0
+type ChatMessage__1037536196 =
+  {content : Text; sender : Principal; timestamp : Int};
+type ChatMessage__74498431 =
+  {content : Text; sender : Principal; timestamp : Int};
+type Clan__833993597 =
+  {members : [Principal]; name : Text; owner : Principal; totalHeight : Nat};
+type Clan__998698249 =
+  {members : [Principal]; name : Text; owner : Principal; totalHeight : Nat};
+type Data__80296667<K, V> =
+  {var count : Nat__1040412405; kvs : [var ?(K, V)]};
+type Internal__41346355<K, V> =
+  {children : [var ?Node__1000929467<K, V>]; data : Data__80296667<K, V>};
+type Leaf__712614010<K, V> = {data : Data__80296667<K, V>};
+type Map__222667396<K, V> = Map__912772452<K, V>;
+type Map__709709801<K, V> =
+  {var root : Node__1000929467<K, V>; var size : Nat__1040412405};
+type Map__912772452<K, V> = Map__709709801<K, V>;
+type Nat__1040412405 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__1000929467<K, V> =
+  {#internal : Internal__41346355<K, V>; #leaf : Leaf__712614010<K, V>};
+type OldAccessControlState__841599830 =
+  {
+    var adminAssigned : Bool;
+    userRoles : OldMap__30246564<Principal, UserRole__1073662873>
+  };
+type OldChatBlockList__249369334<T> =
+  {var blockIndex : Nat; var blocks : [var [var ?T]]; var elementIndex : Nat};
+type OldData__631653343<K, V> = {var count : Nat; kvs : [var ?(K, V)]};
+type OldMap__30246564<K, V> =
+  {var root : OldNode__460320417<K, V>; var size : Nat};
+type OldNode__460320417<K, V> =
+  {
+    #internal :
+      {
+        children : [var ?OldNode__460320417<K, V>];
+        data : OldData__631653343<K, V>
+      };
+    #leaf : {data : OldData__631653343<K, V>}
+  };
+type UserProfile__315128327 = {joinedAt : Int; name : Text};
+type UserProfile__491224006 = {joinedAt : Int; name : Text};
+type UserProgress__375927397 =
+  {clouds : Nat; highestHeight : Nat; level : Nat; prestige : Nat; xp : Nat};
+type UserProgress__827981433 =
+  {clouds : Nat; highestHeight : Nat; level : Nat; prestige : Nat; xp : Nat};
+type UserRole__1073662873 = {#admin; #guest; #user};
+actor ({
+  in accessControlState : OldAccessControlState__841599830;
+  in var chatMessages : OldChatBlockList__249369334<ChatMessage__74498431>;
+  in var clans : OldMap__30246564<Text, Clan__833993597>;
+  stable var globalStatsInitialized : Bool;
+  in var highScores : OldMap__30246564<Text, Nat>;
+  stable var totalGamesPlayed : Nat;
+  stable var totalHeightReached : Nat;
+  stable var totalJumps : Nat;
+  stable var totalPlayers : Nat;
+  in var uniquePlayers : OldMap__30246564<Principal, ()>;
+  in var userClans : OldMap__30246564<Principal, Text>;
+  in var userProfiles : OldMap__30246564<Principal, UserProfile__315128327>;
+  in var userProgress : OldMap__30246564<Principal, UserProgress__375927397>
+}, {
+  stable accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__222667396<Principal, UserRole__1073662873>
+    };
+  stable var chatMessages :
+    {
+      var blockIndex : Nat__1040412405;
+      var blocks : [var [var ?ChatMessage__1037536196]];
+      var elementIndex : Nat__1040412405
+    };
+  stable var clans :
+    {
+      var root : Node__1000929467<Text, Clan__998698249>;
+      var size : Nat__1040412405
+    };
+  stable var globalStatsInitialized : Bool;
+  stable var highScores :
+    {var root : Node__1000929467<Text, Nat>; var size : Nat__1040412405};
+  stable var totalGamesPlayed : Nat;
+  stable var totalHeightReached : Nat;
+  stable var totalJumps : Nat;
+  stable var totalPlayers : Nat;
+  stable var uniquePlayers :
+    {var root : Node__1000929467<Principal, ()>; var size : Nat__1040412405};
+  stable var userClans :
+    {
+      var root : Node__1000929467<Principal, Text>;
+      var size : Nat__1040412405
+    };
+  stable var userProfiles :
+    {
+      var root : Node__1000929467<Principal, UserProfile__491224006>;
+      var size : Nat__1040412405
+    };
+  stable var userProgress :
+    {
+      var root : Node__1000929467<Principal, UserProgress__827981433>;
+      var size : Nat__1040412405
+    }
+});

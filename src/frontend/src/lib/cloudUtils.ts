@@ -1,6 +1,6 @@
 /**
  * Cloud Currency Utility Functions
- * 
+ *
  * Cloud earning logic: 1 Cloud per 2500 height points
  */
 

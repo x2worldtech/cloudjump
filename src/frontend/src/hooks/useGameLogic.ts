@@ -1,328 +1,634 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { GameState, Player, Platform, Enemy, PowerUp } from '@/lib/types';
-import { drawGame } from '@/lib/gameRenderer';
 import {
+  ENEMY_KILLED_BY_BOOST,
+  ENEMY_KILLED_BY_BULLET,
   GRAVITY,
-  JUMP_VELOCITY,
-  MOVE_SPEED,
-  PLATFORM_WIDTH,
-  PLATFORM_HEIGHT,
-  PLAYER_WIDTH,
-  PLAYER_HEIGHT,
-  SPRING_BOOST,
-  PROPELLER_BOOST,
-  PROPELLER_DURATION,
   JETPACK_BOOST,
   JETPACK_DURATION,
+  JUMP_VELOCITY,
+  MAX_PARTICLES,
+  MOVE_SPEED,
+  PLATFORM_HEIGHT,
+  PLATFORM_WIDTH,
+  PLAYER_HEIGHT,
+  PLAYER_WIDTH,
+  PROPELLER_BOOST,
+  PROPELLER_DURATION,
   ROCKET_BOOST,
   ROCKET_DURATION,
-  WORLD_SCALE,
-} from '@/lib/constants';
-import { useDeviceOrientation, isMobileDevice } from './useDeviceOrientation';
+  SPRING_BOOST,
+  STOMP_BASE_SCORE,
+  STOMP_BOUNCE_FACTOR,
+  STOMP_COMBO_MULTIPLIER,
+  STOMP_COMBO_WINDOW_MS,
+} from "@/lib/constants";
+import { drawGame, resetBackgroundClouds } from "@/lib/gameRenderer";
+import type {
+  Bullet,
+  Enemy,
+  EnemyType,
+  GameState,
+  Particle,
+  Platform,
+  Player,
+  PowerUp,
+  PowerUpType,
+} from "@/lib/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { isMobileDevice, useDeviceOrientation } from "./useDeviceOrientation";
 
-// Audio context for sound effects
+// -----------------------------------------------------------------------------
+// Audio - lazy AudioContext + tiny synth-style SFX
+// -----------------------------------------------------------------------------
 let audioContext: AudioContext | null = null;
 
-// Initialize audio context (lazy initialization to avoid autoplay restrictions)
-const getAudioContext = () => {
+const getAudioContext = (): AudioContext | null => {
+  if (typeof window === "undefined") return null;
   if (!audioContext) {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    try {
+      audioContext = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+    } catch {
+      return null;
+    }
   }
   return audioContext;
 };
 
-// Generate and play a satisfying jump sound effect
-const playJumpSound = () => {
+function playJumpSound() {
   try {
     const ctx = getAudioContext();
-    
-    // Resume context if suspended (required for some browsers)
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
-    
-    // Create oscillator for the bounce sound
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    // Connect nodes
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    // Configure bounce sound: quick frequency sweep from high to low
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(600, now);
-    oscillator.frequency.exponentialRampToValueAtTime(200, now + 0.1);
-    
-    // Volume envelope: quick attack and decay for punchy sound
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.15, now + 0.01); // Quick attack
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15); // Smooth decay
-    
-    // Play the sound
-    oscillator.start(now);
-    oscillator.stop(now + 0.15);
-    
-    // Clean up after sound finishes
-    oscillator.onended = () => {
-      oscillator.disconnect();
-      gainNode.disconnect();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(200, now + 0.1);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now);
+    osc.stop(now + 0.15);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
     };
-  } catch (error) {
-    // Silently fail if audio is not supported or blocked
-    console.warn('Jump sound playback failed:', error);
+  } catch {
+    /* ignore */
   }
-};
+}
 
-// Generate and play jetpack activation sound effect
-const playJetpackSound = () => {
+function playJetpackSound() {
   try {
     const ctx = getAudioContext();
-    
-    // Resume context if suspended
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
-    
-    // Create oscillator for rocket ignition whoosh sound
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    // Add filter for more realistic rocket sound
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
+    filter.type = "lowpass";
     filter.frequency.setValueAtTime(800, now);
     filter.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
-    
-    // Connect nodes
-    oscillator.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    // Configure jetpack sound: low rumble with rising pitch
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(80, now);
-    oscillator.frequency.exponentialRampToValueAtTime(150, now + 0.3);
-    
-    // Volume envelope: quick attack, sustained, then decay
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.2, now + 0.05); // Quick attack
-    gainNode.gain.linearRampToValueAtTime(0.18, now + 0.2); // Sustain
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4); // Decay
-    
-    // Play the sound
-    oscillator.start(now);
-    oscillator.stop(now + 0.4);
-    
-    // Clean up after sound finishes
-    oscillator.onended = () => {
-      oscillator.disconnect();
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(80, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.3);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.2, now + 0.05);
+    gain.gain.linearRampToValueAtTime(0.18, now + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.4);
+    osc.onended = () => {
+      osc.disconnect();
       filter.disconnect();
-      gainNode.disconnect();
+      gain.disconnect();
     };
-  } catch (error) {
-    // Silently fail if audio is not supported or blocked
-    console.warn('Jetpack sound playback failed:', error);
+  } catch {
+    /* ignore */
   }
-};
+}
 
-// Generate and play rocket launch sound effect
-const playRocketSound = () => {
+function playRocketSound() {
   try {
     const ctx = getAudioContext();
-    
-    // Resume context if suspended
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
-    
-    // Create oscillator for powerful rocket engine sound
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    // Add filter for deep rocket rumble
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
+    filter.type = "lowpass";
     filter.frequency.setValueAtTime(600, now);
     filter.frequency.exponentialRampToValueAtTime(1500, now + 0.5);
-    
-    // Connect nodes
-    oscillator.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    // Configure rocket sound: deep rumble with powerful rising pitch
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(60, now);
-    oscillator.frequency.exponentialRampToValueAtTime(180, now + 0.5);
-    
-    // Volume envelope: powerful attack, sustained, then decay
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.25, now + 0.08); // Powerful attack
-    gainNode.gain.linearRampToValueAtTime(0.22, now + 0.3); // Sustain
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6); // Decay
-    
-    // Play the sound
-    oscillator.start(now);
-    oscillator.stop(now + 0.6);
-    
-    // Clean up after sound finishes
-    oscillator.onended = () => {
-      oscillator.disconnect();
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(60, now);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 0.5);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.25, now + 0.08);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+    osc.start(now);
+    osc.stop(now + 0.6);
+    osc.onended = () => {
+      osc.disconnect();
       filter.disconnect();
-      gainNode.disconnect();
+      gain.disconnect();
     };
-  } catch (error) {
-    // Silently fail if audio is not supported or blocked
-    console.warn('Rocket sound playback failed:', error);
+  } catch {
+    /* ignore */
   }
-};
+}
 
-// Generate and play falling/game-over sound effect
-const playGameOverSound = () => {
+function playStompSound(combo: number) {
   try {
     const ctx = getAudioContext();
-    
-    // Resume context if suspended
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
-    
-    // Create oscillator for falling sound
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    // Add filter for more dramatic falling effect
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "triangle";
+    // higher pitch for higher combo
+    const base = 350 + Math.min(combo, 6) * 80;
+    osc.frequency.setValueAtTime(base, now);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.8, now + 0.12);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+    osc.start(now);
+    osc.stop(now + 0.18);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  } catch {
+    /* ignore */
+  }
+}
+
+function playPickupSound() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(1300, now + 0.12);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now);
+    osc.stop(now + 0.15);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  } catch {
+    /* ignore */
+  }
+}
+
+function playShootSound() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(2000, now);
+    filter.frequency.exponentialRampToValueAtTime(400, now + 0.12);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "square";
+    osc.frequency.setValueAtTime(900, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.13);
+    osc.onended = () => {
+      osc.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  } catch {
+    /* ignore */
+  }
+}
+
+function playGameOverSound() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
     filter.frequency.setValueAtTime(1200, now);
     filter.frequency.exponentialRampToValueAtTime(100, now + 0.5);
-    
-    // Connect nodes
-    oscillator.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    // Configure falling sound: descending pitch sweep for dramatic effect
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(800, now);
-    oscillator.frequency.exponentialRampToValueAtTime(150, now + 0.5);
-    
-    // Volume envelope: quick attack, sustained, then fade out
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.18, now + 0.05); // Quick attack
-    gainNode.gain.linearRampToValueAtTime(0.15, now + 0.2); // Sustain
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5); // Fade out
-    
-    // Play the sound
-    oscillator.start(now);
-    oscillator.stop(now + 0.5);
-    
-    // Clean up after sound finishes
-    oscillator.onended = () => {
-      oscillator.disconnect();
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.5);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.18, now + 0.05);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc.start(now);
+    osc.stop(now + 0.5);
+    osc.onended = () => {
+      osc.disconnect();
       filter.disconnect();
-      gainNode.disconnect();
+      gain.disconnect();
     };
-  } catch (error) {
-    // Silently fail if audio is not supported or blocked
-    console.warn('Game over sound playback failed:', error);
+  } catch {
+    /* ignore */
   }
-};
+}
 
+// CSS pixel canvas size helpers - pure module-level functions so they're
+// stable references and never need to live in useCallback dependency arrays.
+function cssWidthOf(canvas: HTMLCanvasElement | null): number {
+  return canvas ? canvas.clientWidth || window.innerWidth : window.innerWidth;
+}
+function cssHeightOf(canvas: HTMLCanvasElement | null): number {
+  return canvas ? canvas.clientHeight || window.innerHeight : window.innerHeight;
+}
+
+// Particle helpers - operate on a ref, no closures over state.
+function pushParticle(particles: Particle[], p: Particle) {
+  if (particles.length >= MAX_PARTICLES) particles.shift();
+  particles.push(p);
+}
+
+function spawnJumpDust(particles: Particle[], x: number, y: number) {
+  for (let i = 0; i < 6; i++) {
+    const ang = Math.PI + (Math.random() - 0.5) * Math.PI * 0.6;
+    const sp = 1 + Math.random() * 1.5;
+    pushParticle(particles, {
+      x,
+      y,
+      vx: Math.cos(ang) * sp,
+      vy: -Math.abs(Math.sin(ang)) * sp * 0.4 + 0.3,
+      life: 24,
+      maxLife: 24,
+      size: 2 + Math.random() * 2,
+      color: "rgba(255,255,255,0.85)",
+      gravity: 0.08,
+      fade: true,
+    });
+  }
+}
+
+function spawnPickupBurst(
+  particles: Particle[],
+  x: number,
+  y: number,
+  color: string,
+) {
+  for (let i = 0; i < 10; i++) {
+    const ang = (i / 10) * Math.PI * 2;
+    const sp = 1.2 + Math.random() * 1.5;
+    pushParticle(particles, {
+      x,
+      y,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      life: 28,
+      maxLife: 28,
+      size: 2 + Math.random() * 2,
+      color,
+      gravity: 0.05,
+      fade: true,
+    });
+  }
+}
+
+function spawnEnemyPop(
+  particles: Particle[],
+  x: number,
+  y: number,
+  color: string,
+) {
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2;
+    const sp = 1.5 + Math.random() * 2;
+    pushParticle(particles, {
+      x,
+      y,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      life: 32,
+      maxLife: 32,
+      size: 2 + Math.random() * 3,
+      color,
+      gravity: 0.1,
+      fade: true,
+    });
+  }
+}
+
+function spawnRocketTrail(particles: Particle[], x: number, y: number) {
+  pushParticle(particles, {
+    x: x + (Math.random() - 0.5) * 6,
+    y,
+    vx: (Math.random() - 0.5) * 0.5,
+    vy: 1 + Math.random() * 1.5,
+    life: 18,
+    maxLife: 18,
+    size: 2 + Math.random() * 2,
+    color: "rgba(255,170,60,0.85)",
+    gravity: 0,
+    fade: true,
+  });
+}
+
+function spawnBreakingCloudDust(
+  particles: Particle[],
+  px: number,
+  py: number,
+  pw: number,
+  ph: number,
+) {
+  for (let i = 0; i < 8; i++) {
+    pushParticle(particles, {
+      x: px + Math.random() * pw,
+      y: py + Math.random() * ph,
+      vx: (Math.random() - 0.5) * 2,
+      vy: 0.5 + Math.random() * 1.5,
+      life: 36,
+      maxLife: 36,
+      size: 2 + Math.random() * 2,
+      color: "rgba(190,195,205,0.9)",
+      gravity: 0.08,
+      fade: true,
+    });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// HUD info exported to React (combo + active boost)
+// -----------------------------------------------------------------------------
+export interface GameHud {
+  combo: number;
+  boost: null | {
+    type: "propeller" | "jetpack" | "rocket";
+    remaining: number; // 0..1
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Hook
+// -----------------------------------------------------------------------------
 export function useGameLogic(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   gameState: GameState,
   setGameState: (state: GameState) => void,
-  onJump?: () => void // Callback for when player jumps - now only increments local counter
+  onJump?: () => void,
 ) {
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+  const [hud, setHud] = useState<GameHud>({ combo: 0, boost: null });
 
+  // Refs - never trigger renders
   const playerRef = useRef<Player | null>(null);
   const platformsRef = useRef<Platform[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
-  const bulletsRef = useRef<Array<{ x: number; y: number; vy: number }>>([]);
-  const keysRef = useRef<{ [key: string]: boolean }>({});
+  const bulletsRef = useRef<Bullet[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
+  const keysRef = useRef<{ [k: string]: boolean }>({});
   const animationFrameRef = useRef<number | null>(null);
-  const worldOffsetRef = useRef(0); // Tracks how much the world has scrolled
+
+  const worldOffsetRef = useRef(0);
   const maxHeightRef = useRef(0);
   const highestPlatformYRef = useRef(0);
-  const gameTimeRef = useRef(0); // Track game time for smooth animations
-  const gameOverSoundPlayedRef = useRef(false); // Track if game over sound has been played
+  const gameTimeRef = useRef(0); // ms
+  const lastFrameTimeRef = useRef(0);
+  const gameOverSoundPlayedRef = useRef(false);
 
-  // Device orientation for mobile tilt controls
+  // Combo system
+  const lastStompTimeRef = useRef(0);
+  const comboRef = useRef(0);
+
+  // Shoot cooldown - prevents spam-tapping from spawning 60 bullets/sec
+  const lastShotTimeRef = useRef(0);
+
+  // Pause carry-over (do not freeze game time when paused)
+  const isPausedRef = useRef(false);
+
+  // Cached high score from localStorage
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("cloudJumpHighScore");
+      if (v) {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n)) setHighScore(n);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Persist high score whenever it grows
+  useEffect(() => {
+    if (highScore <= 0) return;
+    try {
+      localStorage.setItem("cloudJumpHighScore", String(highScore));
+    } catch {
+      /* ignore */
+    }
+  }, [highScore]);
+
+  // Device orientation - tilt controls on mobile
   const isMobile = isMobileDevice();
-  const deviceOrientation = useDeviceOrientation(isMobile && gameState === 'playing');
+  const deviceOrientation = useDeviceOrientation(
+    isMobile && gameState === "playing",
+  );
 
-  const createPlatform = useCallback((x: number, y: number, canvasWidth: number): Platform => {
-    // 15-20% of platforms should be moving
-    const isMoving = Math.random() < 0.175; // 17.5% moving platforms
-    
-    const platform: Platform = {
+  // ---------------------------------------------------------------------------
+  // DPR-aware canvas resize. Crisp on retina/phone displays.
+  // ---------------------------------------------------------------------------
+  const setupCanvasSize = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cssW = window.innerWidth;
+    const cssH = window.innerHeight;
+    canvas.style.width = `${cssW}px`;
+    canvas.style.height = `${cssH}px`;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resetBackgroundClouds();
+  }, [canvasRef]);
+
+  useEffect(() => {
+    setupCanvasSize();
+    const onResize = () => setupCanvasSize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [setupCanvasSize]);
+
+  // ---------------------------------------------------------------------------
+  // Platform / enemy / power-up factories
+  // ---------------------------------------------------------------------------
+  const createPlatform = useCallback((x: number, y: number): Platform => {
+    const isMoving = Math.random() < 0.175;
+    const p: Platform = {
       x,
       y,
       width: PLATFORM_WIDTH,
       height: PLATFORM_HEIGHT,
-      type: Math.random() < 0.75 ? 'normal' : 'breaking',
+      type: Math.random() < 0.75 ? "normal" : "breaking",
       broken: false,
     };
-
     if (isMoving) {
-      // Configure moving platform properties
-      platform.isMoving = true;
-      platform.movingBaseX = x; // Store the center position
-      platform.movingSpeed = 0.8 + Math.random() * 0.6; // Speed variation (0.8-1.4)
-      platform.movingRange = 40 + Math.random() * 40; // Range variation (40-80 pixels)
+      p.isMoving = true;
+      p.movingBaseX = x;
+      p.movingSpeed = 0.8 + Math.random() * 0.6;
+      p.movingRange = 40 + Math.random() * 40;
     }
-
-    return platform;
+    return p;
   }, []);
 
-  const updateMovingPlatforms = useCallback((deltaTime: number, canvasWidth: number) => {
-    // Update all moving platforms based on time
-    for (const platform of platformsRef.current) {
-      if (platform.isMoving && platform.movingBaseX !== undefined && 
-          platform.movingSpeed !== undefined && platform.movingRange !== undefined) {
-        
-        // Calculate smooth sinusoidal horizontal movement
-        const time = gameTimeRef.current * 0.001; // Convert to seconds
-        const offset = Math.sin(time * platform.movingSpeed) * platform.movingRange;
-        
-        // Update platform x position
-        platform.x = platform.movingBaseX + offset;
-        
-        // Ensure platform stays within canvas bounds
-        if (platform.x < 0) {
-          platform.movingBaseX += Math.abs(platform.x);
-          platform.x = 0;
-        } else if (platform.x + platform.width > canvasWidth) {
-          platform.movingBaseX -= (platform.x + platform.width - canvasWidth);
-          platform.x = canvasWidth - platform.width;
+  const createEnemy = useCallback(
+    (canvasW: number, y: number, difficulty: number): Enemy => {
+      // Spawn weights vary with difficulty.
+      // Blobs always available. Bats appear after low difficulty,
+      // spikies appear once climb is meaningful.
+      const r = Math.random();
+      let type: EnemyType = "blob";
+      if (difficulty > 0.15 && r > 0.65 && r <= 0.9) {
+        type = "bat";
+      } else if (difficulty > 0.3 && r > 0.9) {
+        type = "spiky";
+      }
+
+      const baseW = type === "spiky" ? 38 : type === "bat" ? 40 : 35;
+      const baseH = type === "spiky" ? 38 : type === "bat" ? 32 : 35;
+
+      const e: Enemy = {
+        x: Math.random() * (canvasW - baseW),
+        y,
+        width: baseW,
+        height: baseH,
+        alive: true,
+        type,
+        wobbleOffset: Math.random() * Math.PI * 2,
+        wobbleSpeed: 0.8 + Math.random() * 0.6,
+      };
+
+      if (type === "bat") {
+        e.driftBaseX = e.x;
+        e.driftSpeed = 0.6 + Math.random() * 0.5;
+        e.driftRange = 60 + Math.random() * 60;
+      }
+
+      return e;
+    },
+    [],
+  );
+
+  const pickPowerUpType = useCallback((): PowerUpType => {
+    const r = Math.random();
+    if (r > 0.95) return "rocket";
+    if (r < 0.4) return "spring";
+    if (r < 0.7) return "propeller";
+    return "jetpack";
+  }, []);
+
+  const updateMovingPlatforms = useCallback((canvasWidth: number) => {
+    for (const p of platformsRef.current) {
+      if (
+        p.isMoving &&
+        p.movingBaseX !== undefined &&
+        p.movingSpeed !== undefined &&
+        p.movingRange !== undefined
+      ) {
+        const t = gameTimeRef.current * 0.001;
+        const off = Math.sin(t * p.movingSpeed) * p.movingRange;
+        p.x = p.movingBaseX + off;
+        if (p.x < 0) {
+          p.movingBaseX += Math.abs(p.x);
+          p.x = 0;
+        } else if (p.x + p.width > canvasWidth) {
+          p.movingBaseX -= p.x + p.width - canvasWidth;
+          p.x = canvasWidth - p.width;
         }
       }
     }
   }, []);
 
+  const updateEnemies = useCallback((canvasWidth: number) => {
+    for (const e of enemiesRef.current) {
+      if (!e.alive) continue;
+      if (
+        e.type === "bat" &&
+        e.driftBaseX !== undefined &&
+        e.driftSpeed !== undefined &&
+        e.driftRange !== undefined
+      ) {
+        const t = gameTimeRef.current * 0.001;
+        e.x = e.driftBaseX + Math.sin(t * e.driftSpeed) * e.driftRange;
+        if (e.x < 0) {
+          e.driftBaseX += -e.x;
+          e.x = 0;
+        } else if (e.x + e.width > canvasWidth) {
+          e.driftBaseX -= e.x + e.width - canvasWidth;
+          e.x = canvasWidth - e.width;
+        }
+      }
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Game init
+  // ---------------------------------------------------------------------------
   const initGame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const cw = cssWidthOf(canvas);
+    const ch = cssHeightOf(canvas);
 
-    // Position player at a fixed position (slightly below center for better view upward)
-    const playerFixedY = canvas.height * 0.6;
-    const startX = canvas.width / 2 - PLAYER_WIDTH / 2;
+    const playerFixedY = ch * 0.6;
+    const startX = cw / 2 - PLAYER_WIDTH / 2;
 
-    const player: Player = {
+    playerRef.current = {
       x: startX,
       y: playerFixedY,
       vx: 0,
@@ -335,541 +641,630 @@ export function useGameLogic(
       jetpackTime: 0,
       hasRocket: false,
       rocketTime: 0,
+      facing: 1,
+      squash: 0,
     };
 
-    playerRef.current = player;
     platformsRef.current = [];
     enemiesRef.current = [];
     powerUpsRef.current = [];
     bulletsRef.current = [];
+    particlesRef.current = [];
     worldOffsetRef.current = 0;
     maxHeightRef.current = 0;
     gameTimeRef.current = 0;
-    gameOverSoundPlayedRef.current = false; // Reset game over sound flag
+    lastFrameTimeRef.current = 0;
+    gameOverSoundPlayedRef.current = false;
+    comboRef.current = 0;
+    lastStompTimeRef.current = 0;
     setScore(0);
+    setHud({ combo: 0, boost: null });
 
-    // Create stable starting platform directly under the player (never moving)
+    // Starting platform directly under the player (never moving, never breaking)
     const startPlatform: Platform = {
       x: startX + PLAYER_WIDTH / 2 - PLATFORM_WIDTH / 2,
       y: playerFixedY + PLAYER_HEIGHT + 25,
       width: PLATFORM_WIDTH,
       height: PLATFORM_HEIGHT,
-      type: 'normal',
+      type: "normal",
       broken: false,
       isMoving: false,
     };
     platformsRef.current.push(startPlatform);
     highestPlatformYRef.current = startPlatform.y;
 
-    // Generate initial platforms extending well above the player
-    // This ensures there's always a path upward from the start
+    // Generate initial column of platforms 2 screens above the start.
     let currentY = startPlatform.y - (60 + Math.random() * 25);
-    const targetY = -canvas.height * 2; // Generate 2 screen heights above initially
-    
+    const targetY = -ch * 2;
     while (currentY > targetY) {
-      const platformX = Math.random() * (canvas.width - PLATFORM_WIDTH);
-      const platform = createPlatform(platformX, currentY, canvas.width);
-      platformsRef.current.push(platform);
-
-      // Track highest platform
+      const px = Math.random() * (cw - PLATFORM_WIDTH);
+      const p = createPlatform(px, currentY);
+      platformsRef.current.push(p);
       if (currentY < highestPlatformYRef.current) {
         highestPlatformYRef.current = currentY;
       }
-
-      // Add power-ups randomly (including jetpack and rocket from the start)
+      // Power-ups
       if (Math.random() < 0.12) {
-        const rand = Math.random();
-        let powerUpType: 'spring' | 'propeller' | 'jetpack' | 'rocket';
-        
-        // Rocket can now spawn at any height with low probability
-        if (rand > 0.95) {
-          powerUpType = 'rocket';
-        } else if (rand < 0.4) {
-          powerUpType = 'spring';
-        } else if (rand < 0.7) {
-          powerUpType = 'propeller';
-        } else {
-          powerUpType = 'jetpack';
-        }
-        
         powerUpsRef.current.push({
-          x: platform.x + PLATFORM_WIDTH / 2 - 12,
-          y: platform.y - 18,
-          type: powerUpType,
+          x: p.x + PLATFORM_WIDTH / 2 - 12,
+          y: p.y - 22,
+          type: pickPowerUpType(),
           used: false,
         });
       }
-
-      // Add enemies randomly with wobble animation properties
+      // Enemies
       if (Math.random() < 0.08) {
-        enemiesRef.current.push({
-          x: Math.random() * (canvas.width - 35),
-          y: currentY - 50,
-          width: 35,
-          height: 35,
-          alive: true,
-          wobbleOffset: Math.random() * Math.PI * 2,
-          wobbleSpeed: 0.8 + Math.random() * 0.6,
-        });
+        enemiesRef.current.push(createEnemy(cw, currentY - 50, 0));
       }
-
-      // Consistent platform spacing
       currentY -= 60 + Math.random() * 25;
     }
-  }, [canvasRef, createPlatform]);
+  }, [canvasRef, createPlatform, createEnemy, pickPowerUpType]);
 
   const generatePlatformsAbove = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const cw = cssWidthOf(canvas);
+    const ch = cssHeightOf(canvas);
 
-    // Generate platforms 2-3 screen heights above the highest existing platform
-    // This ensures continuous upward gameplay
-    const generationThreshold = highestPlatformYRef.current - canvas.height * 2.5;
-
-    // Keep generating platforms until we have sufficient coverage above
+    const generationThreshold = highestPlatformYRef.current - ch * 2.5;
     while (highestPlatformYRef.current > generationThreshold) {
-      // Calculate difficulty based on total height climbed (world offset)
       const heightClimbed = worldOffsetRef.current;
       const difficulty = Math.min(heightClimbed / 3000, 0.7);
-      
-      // Platform spacing: varies with difficulty
-      // Base spacing ensures all platforms are reachable
+
       const minSpacing = 55;
-      const maxSpacing = 80 + difficulty * 20; // Gradually increases spacing
+      const maxSpacing = 80 + difficulty * 20;
       const spacing = minSpacing + Math.random() * (maxSpacing - minSpacing);
-      
       const newY = highestPlatformYRef.current - spacing;
 
-      // Increase breaking platform chance gradually with height
       const breakingChance = 0.12 + difficulty * 0.25;
-
-      const platformX = Math.random() * (canvas.width - PLATFORM_WIDTH);
-      const platform = createPlatform(platformX, newY, canvas.width);
-      
-      // Override type based on difficulty
-      if (Math.random() < breakingChance) {
-        platform.type = 'breaking';
-      }
-      
-      platformsRef.current.push(platform);
-      
-      // Update highest platform Y reference
+      const px = Math.random() * (cw - PLATFORM_WIDTH);
+      const p = createPlatform(px, newY);
+      if (Math.random() < breakingChance) p.type = "breaking";
+      platformsRef.current.push(p);
       highestPlatformYRef.current = newY;
 
-      // Add power-ups with frequency based on difficulty
-      // Rocket can now spawn at any height with balanced frequency
-      const powerUpChance = 0.10 + difficulty * 0.06;
+      const powerUpChance = 0.1 + difficulty * 0.06;
       if (Math.random() < powerUpChance) {
-        const rand = Math.random();
-        let powerUpType: 'spring' | 'propeller' | 'jetpack' | 'rocket';
-        
-        // Rocket spawns randomly throughout the game with low probability
-        if (rand > 0.95) {
-          powerUpType = 'rocket';
-        } else if (rand < 0.4) {
-          powerUpType = 'spring';
-        } else if (rand < 0.7) {
-          powerUpType = 'propeller';
-        } else {
-          powerUpType = 'jetpack';
-        }
-        
         powerUpsRef.current.push({
-          x: platform.x + PLATFORM_WIDTH / 2 - 12,
-          y: platform.y - 18,
-          type: powerUpType,
+          x: p.x + PLATFORM_WIDTH / 2 - 12,
+          y: p.y - 22,
+          type: pickPowerUpType(),
           used: false,
         });
       }
 
-      // Add enemies with increasing frequency as player climbs
       const enemyChance = 0.05 + difficulty * 0.12;
       if (Math.random() < enemyChance) {
-        enemiesRef.current.push({
-          x: Math.random() * (canvas.width - 35),
-          y: newY - 50,
-          width: 35,
-          height: 35,
-          alive: true,
-          wobbleOffset: Math.random() * Math.PI * 2,
-          wobbleSpeed: 0.8 + Math.random() * 0.6,
-        });
+        enemiesRef.current.push(createEnemy(cw, newY - 50, difficulty));
       }
     }
-  }, [canvasRef, createPlatform]);
+  }, [canvasRef, createPlatform, createEnemy, pickPowerUpType]);
 
-  const gameLoop = useCallback(() => {
-    const canvas = canvasRef.current;
-    const player = playerRef.current;
-    if (!canvas || !player || gameState !== 'playing') return;
+  // ---------------------------------------------------------------------------
+  // Game loop
+  // ---------------------------------------------------------------------------
+  // Read-only refs for state so the loop never rebinds
+  const gameStateRef = useRef(gameState);
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
-    // Update game time for smooth animations (milliseconds)
-    gameTimeRef.current += 16; // Approximate 60 FPS
+  const setGameStateRef = useRef(setGameState);
+  useEffect(() => {
+    setGameStateRef.current = setGameState;
+  }, [setGameState]);
 
-    // Update moving platforms
-    updateMovingPlatforms(16, canvas.width);
+  const onJumpRef = useRef(onJump);
+  useEffect(() => {
+    onJumpRef.current = onJump;
+  }, [onJump]);
 
-    // CRITICAL: Check for game over - if player falls below screen
-    if (player.y > canvas.height + 100) {
-      // Play game over sound effect once at the moment of fall detection
-      if (!gameOverSoundPlayedRef.current) {
-        playGameOverSound();
-        gameOverSoundPlayedRef.current = true;
+  const deviceOrientationRef = useRef(deviceOrientation);
+  useEffect(() => {
+    deviceOrientationRef.current = deviceOrientation;
+  }, [deviceOrientation]);
+
+  // Throttle HUD setState to ~6 fps so we don't re-render every frame.
+  const lastHudPushRef = useRef(0);
+
+  const gameLoop = useCallback(
+    (now: number) => {
+      const canvas = canvasRef.current;
+      const player = playerRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !player || !ctx) {
+        animationFrameRef.current = null;
+        return;
       }
-      
-      setGameState('gameOver');
-      return;
-    }
-
-    // Handle input - keyboard, touch, or tilt
-    let moveDirection = 0;
-
-    // Keyboard input
-    if (keysRef.current['ArrowLeft'] || keysRef.current['a'] || keysRef.current['A']) {
-      moveDirection = -1;
-    } else if (keysRef.current['ArrowRight'] || keysRef.current['d'] || keysRef.current['D']) {
-      moveDirection = 1;
-    }
-
-    // Device tilt input (overrides keyboard on mobile)
-    if (isMobile && deviceOrientation.permissionGranted && Math.abs(deviceOrientation.tiltX) > 0.05) {
-      moveDirection = deviceOrientation.tiltX;
-    }
-
-    // Apply movement with analog control support
-    player.vx = moveDirection * MOVE_SPEED;
-
-    // Update player position
-    player.x += player.vx;
-
-    // Screen wrap-around
-    if (player.x < -player.width) {
-      player.x = canvas.width;
-    } else if (player.x > canvas.width) {
-      player.x = -player.width;
-    }
-
-    // Apply gravity, rocket, jetpack, or propeller
-    if (player.hasRocket && player.rocketTime > 0) {
-      // Rocket provides the most powerful upward boost
-      player.vy = -ROCKET_BOOST;
-      player.rocketTime--;
-      if (player.rocketTime <= 0) {
-        player.hasRocket = false;
+      if (gameStateRef.current !== "playing") {
+        animationFrameRef.current = null;
+        return;
       }
-    } else if (player.hasJetpack && player.jetpackTime > 0) {
-      // Jetpack provides significantly faster upward boost
-      player.vy = -JETPACK_BOOST;
-      player.jetpackTime--;
-      if (player.jetpackTime <= 0) {
-        player.hasJetpack = false;
-      }
-    } else if (player.hasPropeller && player.propellerTime > 0) {
-      player.vy = -PROPELLER_BOOST;
-      player.propellerTime--;
-      if (player.propellerTime <= 0) {
-        player.hasPropeller = false;
-      }
-    } else {
-      player.vy += GRAVITY;
-    }
 
-    player.y += player.vy;
+      // Delta time in ms - clamped so a backgrounded tab doesn't teleport entities.
+      let dt = lastFrameTimeRef.current ? now - lastFrameTimeRef.current : 16;
+      if (dt > 60) dt = 60;
+      lastFrameTimeRef.current = now;
+      gameTimeRef.current += dt;
 
-    // Platform collision (only when falling)
-    if (player.vy > 0) {
-      for (const platform of platformsRef.current) {
-        if (
-          !platform.broken &&
-          player.x + player.width > platform.x &&
-          player.x < platform.x + platform.width &&
-          player.y + player.height > platform.y &&
-          player.y + player.height < platform.y + platform.height + 10 &&
-          player.vy > 0
-        ) {
-          // JUMP LOGIC: Play sound effect when jump begins
-          playJumpSound();
-          
-          // Trigger jump callback to increment LOCAL counter (no backend call)
-          if (onJump) {
-            onJump();
-          }
-          
-          player.vy = JUMP_VELOCITY;
-          if (platform.type === 'breaking') {
-            platform.broken = true;
-          }
+      const cw = cssWidthOf(canvas);
+      const ch = cssHeightOf(canvas);
+
+      updateMovingPlatforms(cw);
+      updateEnemies(cw);
+
+      // Game over by falling off the screen
+      if (player.y > ch + 100) {
+        if (!gameOverSoundPlayedRef.current) {
+          playGameOverSound();
+          gameOverSoundPlayedRef.current = true;
         }
+        setGameStateRef.current("gameOver");
+        animationFrameRef.current = null;
+        return;
       }
-    }
 
-    // Check if any item effect is currently active
-    const hasActiveItemEffect = (player.hasRocket && player.rocketTime > 0) ||
-                                 (player.hasJetpack && player.jetpackTime > 0) || 
-                                 (player.hasPropeller && player.propellerTime > 0);
-
-    // Power-up collision - BLOCKED DURING ACTIVE EFFECTS
-    // While an item effect is active, all power-up collection is temporarily disabled
-    if (!hasActiveItemEffect) {
-      for (const powerUp of powerUpsRef.current) {
-        if (
-          !powerUp.used &&
-          player.x + player.width > powerUp.x &&
-          player.x < powerUp.x + 24 &&
-          player.y + player.height > powerUp.y &&
-          player.y < powerUp.y + 24
-        ) {
-          powerUp.used = true;
-          if (powerUp.type === 'spring') {
-            // SPRING BOOST: Play sound effect for spring jump
-            playJumpSound();
-            
-            // Trigger jump callback for spring boost (LOCAL counter only)
-            if (onJump) {
-              onJump();
-            }
-            
-            player.vy = SPRING_BOOST;
-          } else if (powerUp.type === 'propeller') {
-            player.hasPropeller = true;
-            player.propellerTime = PROPELLER_DURATION;
-          } else if (powerUp.type === 'jetpack') {
-            // JETPACK ACTIVATION: Play distinctive jetpack sound
-            playJetpackSound();
-            
-            // Activate jetpack with higher boost and shorter duration
-            player.hasJetpack = true;
-            player.jetpackTime = JETPACK_DURATION;
-            
-            // Deactivate propeller if active (jetpack takes priority)
-            player.hasPropeller = false;
-            player.propellerTime = 0;
-          } else if (powerUp.type === 'rocket') {
-            // ROCKET ACTIVATION: Play powerful rocket launch sound
-            playRocketSound();
-            
-            // Activate rocket with maximum boost and extended duration
-            player.hasRocket = true;
-            player.rocketTime = ROCKET_DURATION;
-            
-            // Deactivate other power-ups (rocket takes priority)
-            player.hasJetpack = false;
-            player.jetpackTime = 0;
-            player.hasPropeller = false;
-            player.propellerTime = 0;
-          }
-        }
-      }
-    }
-
-    // Enemy collision - ROCKET AND JETPACK IMMUNITY, ENEMY DESTRUCTION, AND STOMP MECHANICS
-    for (const enemy of enemiesRef.current) {
-      if (
-        enemy.alive &&
-        player.x + player.width > enemy.x &&
-        player.x < enemy.x + enemy.width &&
-        player.y + player.height > enemy.y &&
-        player.y < enemy.y + enemy.height
+      // Input: keyboard, tilt
+      let moveDir = 0;
+      if (keysRef.current.ArrowLeft || keysRef.current.a || keysRef.current.A) {
+        moveDir = -1;
+      } else if (
+        keysRef.current.ArrowRight ||
+        keysRef.current.d ||
+        keysRef.current.D
       ) {
-        // Check if player has active rocket or jetpack
-        if ((player.hasRocket && player.rocketTime > 0) || (player.hasJetpack && player.jetpackTime > 0)) {
-          // INVULNERABILITY: Player is immune to enemy damage
-          // ENEMY DESTRUCTION: Destroy enemy on contact
-          enemy.alive = false;
-          // Award bonus points for destroying enemy with rocket or jetpack
-          setScore((prev) => prev + 100);
-        } else {
-          // ENEMY STOMP MECHANICS: Check if player is landing on enemy from above
-          // Conditions for stomp:
-          // 1. Player must be falling (positive downward velocity)
-          // 2. Player's bottom must be near the top of the enemy (landing from above)
-          const playerBottom = player.y + player.height;
-          const enemyTop = enemy.y;
-          const enemyMiddle = enemy.y + enemy.height / 2;
-          
-          // Check if player is falling and landing on top half of enemy
-          const isStompingFromAbove = player.vy > 0 && playerBottom < enemyMiddle;
-          
-          if (isStompingFromAbove) {
-            // STOMP SUCCESS: Destroy enemy and give player a small bounce
-            enemy.alive = false;
-            
-            // Small bounce effect for smooth gameplay (about 60% of normal jump)
-            player.vy = JUMP_VELOCITY * 0.6;
-            
-            // Play jump sound for satisfying feedback
+        moveDir = 1;
+      }
+      const orient = deviceOrientationRef.current;
+      if (isMobile && orient.permissionGranted && Math.abs(orient.tiltX) > 0.05) {
+        moveDir = orient.tiltX;
+      }
+
+      if (moveDir !== 0) {
+        player.facing = moveDir < 0 ? -1 : 1;
+      }
+      player.vx = moveDir * MOVE_SPEED;
+      player.x += player.vx;
+
+      // Wrap horizontally
+      if (player.x < -player.width) player.x = cw;
+      else if (player.x > cw) player.x = -player.width;
+
+      // Boost logic
+      let activeBoost: GameHud["boost"] = null;
+      if (player.hasRocket && player.rocketTime > 0) {
+        player.vy = -ROCKET_BOOST;
+        player.rocketTime--;
+        if (player.rocketTime <= 0) player.hasRocket = false;
+        spawnRocketTrail(
+          particlesRef.current,
+          player.x + player.width / 2,
+          player.y + player.height,
+        );
+        activeBoost = {
+          type: "rocket",
+          remaining: player.rocketTime / ROCKET_DURATION,
+        };
+      } else if (player.hasJetpack && player.jetpackTime > 0) {
+        player.vy = -JETPACK_BOOST;
+        player.jetpackTime--;
+        if (player.jetpackTime <= 0) player.hasJetpack = false;
+        if (player.jetpackTime % 2 === 0) {
+          spawnRocketTrail(
+            particlesRef.current,
+            player.x + player.width * 0.55,
+            player.y + player.height * 0.5,
+          );
+        }
+        activeBoost = {
+          type: "jetpack",
+          remaining: player.jetpackTime / JETPACK_DURATION,
+        };
+      } else if (player.hasPropeller && player.propellerTime > 0) {
+        player.vy = -PROPELLER_BOOST;
+        player.propellerTime--;
+        if (player.propellerTime <= 0) player.hasPropeller = false;
+        activeBoost = {
+          type: "propeller",
+          remaining: player.propellerTime / PROPELLER_DURATION,
+        };
+      } else {
+        player.vy += GRAVITY;
+      }
+      player.y += player.vy;
+
+      // Squash decays each frame
+      if (player.squash > 0) {
+        player.squash = Math.max(0, player.squash - 0.06);
+      }
+
+      // Platform collision (only when falling)
+      if (player.vy > 0) {
+        for (const p of platformsRef.current) {
+          if (p.broken) continue;
+          if (
+            player.x + player.width > p.x &&
+            player.x < p.x + p.width &&
+            player.y + player.height > p.y &&
+            player.y + player.height < p.y + p.height + 10
+          ) {
             playJumpSound();
-            
-            // Award bonus points for stomping enemy
-            setScore((prev) => prev + 75);
-          } else {
-            // SIDE/BELOW COLLISION: Normal behavior - game over
-            // Play game over sound effect once at the moment of collision
-            if (!gameOverSoundPlayedRef.current) {
-              playGameOverSound();
-              gameOverSoundPlayedRef.current = true;
+            onJumpRef.current?.();
+            player.vy = JUMP_VELOCITY;
+            player.squash = 1;
+            spawnJumpDust(
+              particlesRef.current,
+              p.x + p.width / 2,
+              p.y + p.height,
+            );
+            if (p.type === "breaking") {
+              p.broken = true;
+              spawnBreakingCloudDust(
+                particlesRef.current,
+                p.x,
+                p.y,
+                p.width,
+                p.height,
+              );
             }
-            
-            setGameState('gameOver');
-            return;
+            // Only register the first colliding platform per frame.
+            break;
           }
         }
       }
-    }
 
-    // Update bullets
-    bulletsRef.current = bulletsRef.current.filter((bullet) => {
-      bullet.y += bullet.vy;
-      
-      // Check bullet-enemy collision
-      for (const enemy of enemiesRef.current) {
-        if (
-          enemy.alive &&
-          bullet.x > enemy.x &&
-          bullet.x < enemy.x + enemy.width &&
-          bullet.y > enemy.y &&
-          bullet.y < enemy.y + enemy.height
-        ) {
-          enemy.alive = false;
-          setScore((prev) => prev + 50);
-          return false;
+      // Power-up collision (blocked while a stronger boost is active)
+      const hasActiveBoost =
+        (player.hasRocket && player.rocketTime > 0) ||
+        (player.hasJetpack && player.jetpackTime > 0) ||
+        (player.hasPropeller && player.propellerTime > 0);
+
+      if (!hasActiveBoost) {
+        for (const pu of powerUpsRef.current) {
+          if (pu.used) continue;
+          if (
+            player.x + player.width > pu.x &&
+            player.x < pu.x + 24 &&
+            player.y + player.height > pu.y &&
+            player.y < pu.y + 24
+          ) {
+            pu.used = true;
+            playPickupSound();
+            const pickupColor =
+              pu.type === "spring"
+                ? "rgba(80,170,255,0.95)"
+                : pu.type === "propeller"
+                  ? "rgba(255,200,80,0.95)"
+                  : pu.type === "jetpack"
+                    ? "rgba(120,180,255,0.95)"
+                    : "rgba(255,140,140,0.95)";
+            spawnPickupBurst(particlesRef.current, pu.x + 12, pu.y + 12, pickupColor);
+
+            if (pu.type === "spring") {
+              playJumpSound();
+              onJumpRef.current?.();
+              player.vy = SPRING_BOOST;
+              player.squash = 1;
+            } else if (pu.type === "propeller") {
+              player.hasPropeller = true;
+              player.propellerTime = PROPELLER_DURATION;
+            } else if (pu.type === "jetpack") {
+              playJetpackSound();
+              player.hasJetpack = true;
+              player.jetpackTime = JETPACK_DURATION;
+              player.hasPropeller = false;
+              player.propellerTime = 0;
+            } else if (pu.type === "rocket") {
+              playRocketSound();
+              player.hasRocket = true;
+              player.rocketTime = ROCKET_DURATION;
+              player.hasJetpack = false;
+              player.jetpackTime = 0;
+              player.hasPropeller = false;
+              player.propellerTime = 0;
+            }
+            break;
+          }
         }
       }
-      
-      return bullet.y > -50;
+
+      // Enemy collision
+      let bonusFromEnemies = 0;
+      for (const e of enemiesRef.current) {
+        if (!e.alive) continue;
+        if (
+          !(
+            player.x + player.width > e.x &&
+            player.x < e.x + e.width &&
+            player.y + player.height > e.y &&
+            player.y < e.y + e.height
+          )
+        ) {
+          continue;
+        }
+
+        // Boost invulnerability
+        if (
+          (player.hasRocket && player.rocketTime > 0) ||
+          (player.hasJetpack && player.jetpackTime > 0)
+        ) {
+          e.alive = false;
+          spawnEnemyPop(
+            particlesRef.current,
+            e.x + e.width / 2,
+            e.y + e.height / 2,
+            e.type === "spiky" ? "rgba(255,120,80,0.95)" : "rgba(180,150,255,0.95)",
+          );
+          bonusFromEnemies += ENEMY_KILLED_BY_BOOST;
+          continue;
+        }
+
+        if (e.type === "spiky") {
+          // Spiky cannot be stomped - instant game over
+          if (!gameOverSoundPlayedRef.current) {
+            playGameOverSound();
+            gameOverSoundPlayedRef.current = true;
+          }
+          setGameStateRef.current("gameOver");
+          animationFrameRef.current = null;
+          return;
+        }
+
+        // Stomp logic for blob/bat
+        const playerBottom = player.y + player.height;
+        const enemyMid = e.y + e.height / 2;
+        const isStomp = player.vy > 0 && playerBottom < enemyMid;
+
+        if (isStomp) {
+          e.alive = false;
+          player.vy = JUMP_VELOCITY * STOMP_BOUNCE_FACTOR;
+          player.squash = 1;
+
+          // Update combo
+          const nowMs = gameTimeRef.current;
+          if (nowMs - lastStompTimeRef.current <= STOMP_COMBO_WINDOW_MS) {
+            comboRef.current += 1;
+          } else {
+            comboRef.current = 1;
+          }
+          lastStompTimeRef.current = nowMs;
+
+          const comboBonus =
+            STOMP_BASE_SCORE *
+            (1 + (comboRef.current - 1) * STOMP_COMBO_MULTIPLIER);
+          bonusFromEnemies += Math.round(comboBonus);
+          playStompSound(comboRef.current);
+          spawnEnemyPop(
+            particlesRef.current,
+            e.x + e.width / 2,
+            e.y + e.height / 2,
+            e.type === "bat" ? "rgba(120,180,255,0.95)" : "rgba(180,140,255,0.95)",
+          );
+        } else {
+          // Side/below hit - game over
+          if (!gameOverSoundPlayedRef.current) {
+            playGameOverSound();
+            gameOverSoundPlayedRef.current = true;
+          }
+          setGameStateRef.current("gameOver");
+          animationFrameRef.current = null;
+          return;
+        }
+      }
+
+      // Combo decay (no kill within window → reset)
+      if (
+        comboRef.current > 0 &&
+        gameTimeRef.current - lastStompTimeRef.current > STOMP_COMBO_WINDOW_MS
+      ) {
+        comboRef.current = 0;
+      }
+
+      // Bullets
+      bulletsRef.current = bulletsRef.current.filter((b) => {
+        b.y += b.vy;
+        for (const e of enemiesRef.current) {
+          if (
+            e.alive &&
+            b.x > e.x &&
+            b.x < e.x + e.width &&
+            b.y > e.y &&
+            b.y < e.y + e.height
+          ) {
+            e.alive = false;
+            bonusFromEnemies += ENEMY_KILLED_BY_BULLET;
+            spawnEnemyPop(
+              particlesRef.current,
+              e.x + e.width / 2,
+              e.y + e.height / 2,
+              "rgba(120,180,255,0.95)",
+            );
+            return false;
+          }
+        }
+        return b.y > -50;
+      });
+
+      // Particles
+      if (particlesRef.current.length > 0) {
+        const kept: Particle[] = [];
+        for (const p of particlesRef.current) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += p.gravity;
+          p.life -= 1;
+          if (p.life > 0 && p.y < ch + 60) kept.push(p);
+        }
+        particlesRef.current = kept;
+      }
+
+      // Endless scroll - keep player around 40% from top
+      const scrollThreshold = ch * 0.4;
+      if (player.y < scrollThreshold) {
+        const scrollAmount = scrollThreshold - player.y;
+        player.y = scrollThreshold;
+        for (const p of platformsRef.current) p.y += scrollAmount;
+        for (const e of enemiesRef.current) e.y += scrollAmount;
+        for (const p of powerUpsRef.current) p.y += scrollAmount;
+        for (const b of bulletsRef.current) b.y += scrollAmount;
+        for (const pa of particlesRef.current) pa.y += scrollAmount;
+        worldOffsetRef.current += scrollAmount;
+        highestPlatformYRef.current += scrollAmount;
+      }
+
+      // Score = height + enemy bonuses
+      const heightScore = Math.floor(worldOffsetRef.current / 10);
+      if (heightScore > maxHeightRef.current || bonusFromEnemies > 0) {
+        const next = Math.max(maxHeightRef.current, heightScore) + (bonusFromEnemies | 0);
+        maxHeightRef.current = next;
+        setScore(next);
+        if (next > highScore) setHighScore(next);
+      }
+
+      // Generate new platforms above
+      generatePlatformsAbove();
+
+      // Aggressive off-screen cleanup
+      const removalThreshold = ch;
+      platformsRef.current = platformsRef.current.filter((p) => p.y < removalThreshold);
+      enemiesRef.current = enemiesRef.current.filter((e) => e.y < removalThreshold);
+      powerUpsRef.current = powerUpsRef.current.filter((p) => p.y < removalThreshold);
+      bulletsRef.current = bulletsRef.current.filter((b) => b.y < removalThreshold + 50);
+
+      // HUD push (throttled)
+      if (gameTimeRef.current - lastHudPushRef.current > 150) {
+        lastHudPushRef.current = gameTimeRef.current;
+        setHud({ combo: comboRef.current, boost: activeBoost });
+      }
+
+      // Draw
+      drawGame(ctx, {
+        canvas,
+        player,
+        platforms: platformsRef.current,
+        enemies: enemiesRef.current,
+        powerUps: powerUpsRef.current,
+        bullets: bulletsRef.current,
+        particles: particlesRef.current,
+        altitude: worldOffsetRef.current,
+        gameTime: gameTimeRef.current,
+      });
+
+      animationFrameRef.current = requestAnimationFrame(gameLoop);
+    },
+    // We intentionally keep this callback stable - all dynamic deps come via refs
+    [
+      canvasRef,
+      generatePlatformsAbove,
+      updateMovingPlatforms,
+      updateEnemies,
+      highScore,
+      isMobile,
+    ],
+  );
+
+  // Shoot: spawn a bullet from the player's mouth, with cooldown,
+  // a muzzle-flash particle burst, and a punchy sound.
+  const SHOOT_COOLDOWN_MS = 250;
+  const tryShoot = useCallback(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (gameStateRef.current !== "playing") return;
+    const now = gameTimeRef.current;
+    if (now - lastShotTimeRef.current < SHOOT_COOLDOWN_MS) return;
+    lastShotTimeRef.current = now;
+
+    // Mouth position: roughly head-height, offset to whichever side the
+    // player is facing. Sprite faces LEFT by default, so when facing=-1 the
+    // mouth is on the left; when facing=1 the renderer flips horizontally
+    // and the mouth ends up on the right.
+    const mouthSide = player.facing < 0 ? -1 : 1;
+    const mouthX = player.x + player.width / 2 + mouthSide * (player.width * 0.55);
+    const mouthY = player.y + player.height * 0.25;
+
+    bulletsRef.current.push({
+      x: mouthX,
+      y: mouthY,
+      vy: -11,
     });
 
-    // ENDLESS LEVEL LOGIC: Scroll the world down when player climbs above threshold
-    // Player stays at a relatively fixed vertical position while world scrolls
-    const scrollThreshold = canvas.height * 0.4; // Player should stay around 40% from top
-    
-    if (player.y < scrollThreshold) {
-      // Calculate how much to scroll
-      const scrollAmount = scrollThreshold - player.y;
-      
-      // Move player back to threshold position
-      player.y = scrollThreshold;
-      
-      // Scroll the entire world down by moving all entities
-      platformsRef.current.forEach((p) => {
-        p.y += scrollAmount;
-        // Update moving platform base Y as well
-        if (p.isMoving && p.movingBaseX !== undefined) {
-          // movingBaseX stays the same, only y changes
-        }
+    // Muzzle-flash particles
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.random() - 0.5) * 0.8 + (mouthSide < 0 ? Math.PI : 0);
+      const sp = 1.5 + Math.random() * 2;
+      particlesRef.current.push({
+        x: mouthX + mouthSide * 4,
+        y: mouthY,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp,
+        life: 14,
+        maxLife: 14,
+        size: 1.5 + Math.random() * 1.8,
+        color: i < 3 ? "rgba(255,230,120,0.95)" : "rgba(255,255,255,0.9)",
+        gravity: 0,
+        fade: true,
       });
-      enemiesRef.current.forEach((e) => (e.y += scrollAmount));
-      powerUpsRef.current.forEach((p) => (p.y += scrollAmount));
-      bulletsRef.current.forEach((b) => (b.y += scrollAmount));
-      
-      // Update world offset to track total height climbed
-      worldOffsetRef.current += scrollAmount;
-      
-      // Update highest platform Y reference when world scrolls
-      highestPlatformYRef.current += scrollAmount;
     }
+    playShootSound();
+  }, []);
 
-    // Update score based on height climbed (world offset)
-    const currentHeight = Math.floor(worldOffsetRef.current / 10);
-    if (currentHeight > maxHeightRef.current) {
-      maxHeightRef.current = currentHeight;
-      setScore(currentHeight);
-      if (currentHeight > highScore) {
-        setHighScore(currentHeight);
+  // Keyboard
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      keysRef.current[e.key] = true;
+      if (e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        tryShoot();
       }
-    }
-
-    // CONTINUOUS PLATFORM GENERATION: Generate new platforms as player climbs
-    generatePlatformsAbove();
-
-    // OPTIMIZED AUTOMATIC CLEANUP: Aggressively remove entities below visible screen
-    // This is critical for maintaining constant performance in endless gameplay
-    // Remove platforms immediately when they go below the screen (no buffer needed)
-    const removalThreshold = canvas.height;
-    
-    // Use efficient in-place filtering to minimize memory allocations
-    // Only keep entities that are still visible or slightly above screen
-    const platformCount = platformsRef.current.length;
-    platformsRef.current = platformsRef.current.filter((p) => p.y < removalThreshold);
-    
-    // Track removed platforms for debugging/optimization metrics
-    const platformsRemoved = platformCount - platformsRef.current.length;
-    
-    // Clean up enemies, power-ups, and bullets with same aggressive threshold
-    enemiesRef.current = enemiesRef.current.filter((e) => e.y < removalThreshold);
-    powerUpsRef.current = powerUpsRef.current.filter((p) => p.y < removalThreshold);
-    bulletsRef.current = bulletsRef.current.filter((b) => b.y < removalThreshold + 50);
-
-    // Draw with optimized renderer that culls off-screen entities
-    drawGame(
-      canvas,
-      player,
-      platformsRef.current,
-      enemiesRef.current,
-      powerUpsRef.current,
-      bulletsRef.current,
-      0, // No camera offset needed since world scrolls instead
-      canvas.height, // Pass canvas height for renderer optimization
-      gameTimeRef.current // Pass game time for animations
-    );
-
-    animationFrameRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, setGameState, generatePlatformsAbove, highScore, isMobile, deviceOrientation, onJump, updateMovingPlatforms]);
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    keysRef.current[e.key] = true;
-    
-    if (e.key === ' ' || e.key === 'Spacebar') {
-      e.preventDefault();
-      const player = playerRef.current;
-      const canvas = canvasRef.current;
-      if (player && canvas && gameState === 'playing') {
-        bulletsRef.current.push({
-          x: player.x + player.width / 2,
-          y: player.y,
-          vy: -10,
-        });
-      }
-    }
-  }, [gameState]);
+    },
+    [tryShoot],
+  );
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     keysRef.current[e.key] = false;
   }, []);
 
+  // Start / stop loop with game state
   useEffect(() => {
-    if (gameState === 'playing') {
-      window.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('keyup', handleKeyUp);
-      
+    if (gameState === "playing") {
+      window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keyup", handleKeyUp);
+      lastFrameTimeRef.current = 0;
       if (!animationFrameRef.current) {
         animationFrameRef.current = requestAnimationFrame(gameLoop);
       }
-
       return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('keyup', handleKeyUp);
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("keyup", handleKeyUp);
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
           animationFrameRef.current = null;
         }
       };
-    } else {
-      // Clean up animation frame when not playing
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, [gameState, gameLoop, handleKeyDown, handleKeyUp]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-    }
-  }, [gameState, gameLoop, handleKeyDown, handleKeyUp]);
+    };
+  }, []);
 
   const startGame = useCallback(() => {
     initGame();
-    setIsPaused(false);
+    isPausedRef.current = false;
   }, [initGame]);
 
   const pauseGame = useCallback(() => {
-    setIsPaused(true);
+    isPausedRef.current = true;
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -877,22 +1272,24 @@ export function useGameLogic(
   }, []);
 
   const resumeGame = useCallback(() => {
-    setIsPaused(false);
+    isPausedRef.current = false;
+    lastFrameTimeRef.current = 0;
   }, []);
 
   const resetGame = useCallback(() => {
     initGame();
-    setIsPaused(false);
+    isPausedRef.current = false;
   }, [initGame]);
 
   return {
     score,
     highScore,
+    hud,
     startGame,
     pauseGame,
     resumeGame,
     resetGame,
-    isPaused,
+    shoot: tryShoot,
     isMobile,
   };
 }

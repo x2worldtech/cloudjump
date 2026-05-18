@@ -1,11 +1,14 @@
-import React from 'react';
+import type React from "react";
 
 interface CloudCoinIconProps {
   size?: number;
   className?: string;
 }
 
-const CloudCoinIcon: React.FC<CloudCoinIconProps> = ({ size = 32, className = '' }) => {
+const CloudCoinIcon: React.FC<CloudCoinIconProps> = ({
+  size = 32,
+  className = "",
+}) => {
   return (
     <svg
       width={size}
@@ -14,6 +17,8 @@ const CloudCoinIcon: React.FC<CloudCoinIconProps> = ({ size = 32, className = ''
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      role="img"
+      aria-label="Cloud coin"
     >
       {/* Outer gold coin circle with gradient */}
       <defs>
@@ -73,7 +78,7 @@ const CloudCoinIcon: React.FC<CloudCoinIconProps> = ({ size = 32, className = ''
           stroke="#BAE6FD"
           strokeWidth="1"
         />
-        
+
         {/* Left cloud puff */}
         <circle
           cx="22"
@@ -83,7 +88,7 @@ const CloudCoinIcon: React.FC<CloudCoinIconProps> = ({ size = 32, className = ''
           stroke="#BAE6FD"
           strokeWidth="1"
         />
-        
+
         {/* Right cloud puff */}
         <circle
           cx="42"
@@ -93,7 +98,7 @@ const CloudCoinIcon: React.FC<CloudCoinIconProps> = ({ size = 32, className = ''
           stroke="#BAE6FD"
           strokeWidth="1"
         />
-        
+
         {/* Top center cloud puff */}
         <circle
           cx="32"
