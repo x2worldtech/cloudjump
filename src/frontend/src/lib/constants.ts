@@ -40,3 +40,18 @@ export const ENEMY_KILLED_BY_BOOST = 100; // jetpack/rocket invulnerability kill
 
 // Particle / FX caps - prevent unbounded growth that would tank performance
 export const MAX_PARTICLES = 120;
+
+// Shooter aim
+// When shooting, the barrel snaps upward and can tilt up to ±60° from vertical.
+export const AIM_SHOOT_MAX_ANGLE = Math.PI / 3;
+// Idle aim: barrel points roughly horizontal toward `facing` direction
+// (like Doodle Jump's snout). Slight downward tilt for natural feel.
+export const AIM_IDLE_ANGLE = Math.PI * 0.55; // ≈ 99° from vertical
+// How fast the aim angle interpolates toward its target (per frame at 60fps).
+// 0..1 ; higher = snappier.
+export const AIM_LERP_SPEED = 0.22;
+// Bullet speed (px/frame at ~60fps).
+export const BULLET_SPEED = 12;
+// Duration the barrel stays in "shooting" pose after firing, before
+// returning to idle side-pose.
+export const SHOOT_POSE_MS = 280;

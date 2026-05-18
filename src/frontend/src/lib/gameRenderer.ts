@@ -26,7 +26,7 @@ function loadPlayerImage() {
 loadPlayerImage();
 
 // Visual scale of the player sprite (hitbox stays at PLAYER_WIDTH/HEIGHT)
-const PLAYER_VISUAL_SCALE = 1.35;
+const PLAYER_VISUAL_SCALE = 1.55;
 
 // -----------------------------------------------------------------------------
 // Parallax background clouds
@@ -1846,60 +1846,242 @@ function drawPlayer(
   }
 
   // Squash and stretch
-  // squash>0 → wider/flatter (just landed); we also stretch on rising velocity.
   const squash = Math.max(0, Math.min(1, player.squash));
   let sx = 1 - squash * 0.18;
   let sy = 1 + squash * 0.12;
   if (player.vy < -5 && !hasRocket && !hasJetpack) {
-    // Rising fast → stretch vertically
     const k = Math.min(1, (-player.vy - 5) / 10);
     sx = 1 - k * 0.1;
     sy = 1 + k * 0.18;
   }
 
+  // ---- 1. Body sprite (no head) ----
   if (imageLoaded && playerImage) {
     const ar = playerImage.width / playerImage.height;
     const visualW = width * PLAYER_VISUAL_SCALE;
     const visualH = visualW / ar;
-
     ctx.save();
-    // Pivot around the bottom-center for squash/stretch
     ctx.translate(x + width / 2, y + height);
-    ctx.scale(player.facing > 0 ? -sx : sx, sy);
+    ctx.scale(sx, sy);
     ctx.drawImage(playerImage, -visualW / 2, -visualH, visualW, visualH);
     ctx.restore();
   } else {
-    // Fallback while sprite loads
     ctx.save();
-    ctx.fillStyle = "#fbbf24";
-    ctx.strokeStyle = "#92400e";
-    ctx.lineWidth = 2;
+    ctx.fillStyle = "#1a2538";
     ctx.beginPath();
-    ctx.arc(x + width / 2, y + height / 2, width / 2, 0, Math.PI * 2);
+    ctx.arc(x + width / 2, y + height * 0.75, width / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
     ctx.restore();
   }
 
-  // Propeller is drawn on top of the head (after sprite).
+  // ---- 2. Head + Trunk as ONE connected shape (the secret to Doodle-Jump feel) ----
+  if (!hasRocket) {
+    drawHeadAndTrunk(ctx, player, sx, sy);
+  }
+
+  // ---- 3. Propeller power-up (on top of head, only without jetpack/rocket) ----
   if (hasPropeller && !hasJetpack && !hasRocket) {
+    const px = x + width / 2;
+    const py = y + height * 0.05;
     ctx.fillStyle = "#ef4444";
     ctx.strokeStyle = "#7a1212";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x + width / 2, y - 4, 6, 0, Math.PI * 2);
+    ctx.arc(px, py - 6, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = "#ffd54f";
     ctx.strokeStyle = "#b88a00";
     ctx.save();
-    ctx.translate(x + width / 2, y - 10);
+    ctx.translate(px, py - 12);
     ctx.rotate((gameTime / 30) % (Math.PI * 2));
     ctx.fillRect(-10, -1.5, 20, 3);
     ctx.strokeRect(-10, -1.5, 20, 3);
     ctx.restore();
   }
+}
+
+/**
+ * Draws the head + trunk as a SINGLE seamless shape.
+ *
+ * Doodle-Jump feel comes from never showing a seam where the snout joins
+ * the head. We achieve this by:
+ *   1. Drawing the OUTLINE for both head + trunk first (dark color),
+ *      using shapes that overlap. The trunk's outline visually merges into
+ *      the head's outline.
+ *   2. Drawing the FILL for both with the same color/gradient, so they
+ *      read as one creature, not two stuck-together parts.
+ *   3. Drawing the details (eyes, goggles, highlights) only after.
+ *
+ * The trunk pivots from a point INSIDE the head so its base is hidden
+ * behind the head's silhouette - looks like it grows out of the face.
+ */
+function drawHeadAndTrunk(
+  ctx: CanvasRenderingContext2D,
+  player: Player,
+  sx: number,
+  sy: number,
+) {
+  // Squash transform anchored at the body so the head moves with stretch.
+  ctx.save();
+  ctx.translate(player.x + player.width / 2, player.y + player.height);
+  ctx.scale(sx, sy);
+
+  // Local head dimensions. Sprite hitbox = PLAYER_WIDTH/HEIGHT (40px).
+  // Head sits on top of the body. With PLAYER_VISUAL_SCALE=1.55 the body
+  // sprite is roughly 62px wide; head should be smaller so the body shows.
+  const headCX = 0;
+  const headCY = -player.height * 1.05; // well above the body sprite
+  const headR = player.width * 0.36;    // ~14.5px radius = ~29px diameter
+
+  // Trunk geometry - SLIM and proportionate.
+  const trunkBaseR = 3.5;
+  const trunkTipR = 4.5;
+  const trunkLen = 17;     // overall length from base out
+
+  // Trunk pivot is INSIDE the head (so its base is hidden behind the head
+  // outline = no visible seam).
+  const pivotX = headCX;
+  const pivotY = headCY + headR * 0.1;
+
+  // Direction unit vector: aimAngle=0 → up (-Y), positive → right (+X).
+  const dx = Math.sin(player.aimAngle);
+  const dy = -Math.cos(player.aimAngle);
+  const px_ = -dy;
+  const py_ = dx;
+
+  // Trunk endpoints. baseStartFromPivot < headR so the base sits inside the
+  // head silhouette - the visible trunk emerges through the head's edge.
+  const baseStartFromPivot = headR * 0.45;
+  const baseX = pivotX + dx * baseStartFromPivot;
+  const baseY = pivotY + dy * baseStartFromPivot;
+  const tipX = pivotX + dx * (baseStartFromPivot + trunkLen);
+  const tipY = pivotY + dy * (baseStartFromPivot + trunkLen);
+
+  // ---- OUTLINE PASS ----
+  // 1a. Head outline (big dark circle)
+  ctx.fillStyle = "#0a1018";
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR + 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 1b. Trunk outline (trapezoid + muzzle circle). Drawn AFTER head outline
+  // so the part inside the head is covered by head's outline = invisible seam.
+  ctx.beginPath();
+  ctx.moveTo(baseX + px_ * (trunkBaseR + 1.8), baseY + py_ * (trunkBaseR + 1.8));
+  ctx.lineTo(tipX + px_ * (trunkTipR + 1.8), tipY + py_ * (trunkTipR + 1.8));
+  ctx.lineTo(tipX - px_ * (trunkTipR + 1.8), tipY - py_ * (trunkTipR + 1.8));
+  ctx.lineTo(baseX - px_ * (trunkBaseR + 1.8), baseY - py_ * (trunkBaseR + 1.8));
+  ctx.closePath();
+  ctx.fill();
+  // Muzzle outline
+  ctx.beginPath();
+  ctx.arc(tipX, tipY, trunkTipR + 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ---- FILL PASS ----
+  // 2a. Head fill (gradient)
+  const headGrad = ctx.createLinearGradient(0, headCY - headR, 0, headCY + headR);
+  headGrad.addColorStop(0, "#a9def9");
+  headGrad.addColorStop(0.5, "#5ab2f0");
+  headGrad.addColorStop(1, "#1e6dad");
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2b. Trunk fill - same colors as head, sampled along trunk's perpendicular
+  // so the gradient direction is "around" the trunk not along it.
+  // We approximate by orienting a linearGradient perpendicular to the trunk.
+  const gradEndX1 = baseX + px_ * trunkBaseR;
+  const gradEndY1 = baseY + py_ * trunkBaseR;
+  const gradEndX2 = baseX - px_ * trunkBaseR;
+  const gradEndY2 = baseY - py_ * trunkBaseR;
+  const trunkGrad = ctx.createLinearGradient(gradEndX1, gradEndY1, gradEndX2, gradEndY2);
+  trunkGrad.addColorStop(0, "#a9def9");
+  trunkGrad.addColorStop(0.5, "#5ab2f0");
+  trunkGrad.addColorStop(1, "#1e6dad");
+  ctx.fillStyle = trunkGrad;
+  ctx.beginPath();
+  ctx.moveTo(baseX + px_ * trunkBaseR, baseY + py_ * trunkBaseR);
+  ctx.lineTo(tipX + px_ * trunkTipR, tipY + py_ * trunkTipR);
+  ctx.lineTo(tipX - px_ * trunkTipR, tipY - py_ * trunkTipR);
+  ctx.lineTo(baseX - px_ * trunkBaseR, baseY - py_ * trunkBaseR);
+  ctx.closePath();
+  ctx.fill();
+
+  // Muzzle disc (open end). Slightly darker for depth.
+  const muzzleGrad = ctx.createRadialGradient(tipX, tipY, 0.3, tipX, tipY, trunkTipR);
+  muzzleGrad.addColorStop(0, "#7fc7f3");
+  muzzleGrad.addColorStop(0.7, "#2a86c4");
+  muzzleGrad.addColorStop(1, "#0e4d80");
+  ctx.fillStyle = muzzleGrad;
+  ctx.beginPath();
+  ctx.arc(tipX, tipY, trunkTipR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner dark mouth hole
+  ctx.fillStyle = "#0a1018";
+  ctx.beginPath();
+  ctx.arc(tipX + dx * 0.3, tipY + dy * 0.3, trunkTipR * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ---- DETAILS PASS (eyes, goggles, highlights) ----
+  // Bottom-of-head shadow for volume
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(headCX, headCY + headR * 0.55, headR * 0.85, headR * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Top specular highlight on head
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.beginPath();
+  ctx.ellipse(headCX - headR * 0.25, headCY - headR * 0.55, headR * 0.35, headR * 0.2, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Eyes / Goggles. We draw two simple dark eyes (more Doodle-Jump-y than
+  // big goggles, which fight with the trunk for attention).
+  const eyeOffset = headR * 0.32;
+  const eyeY = headCY - headR * 0.05;
+  const eyeR = headR * 0.16;
+  // Eye whites
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#0a1018";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(headCX - eyeOffset, eyeY, eyeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(headCX + eyeOffset, eyeY, eyeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Pupils
+  ctx.fillStyle = "#0a1018";
+  const pupilR = eyeR * 0.55;
+  ctx.beginPath();
+  ctx.arc(headCX - eyeOffset, eyeY + eyeR * 0.1, pupilR, 0, Math.PI * 2);
+  ctx.arc(headCX + eyeOffset, eyeY + eyeR * 0.1, pupilR, 0, Math.PI * 2);
+  ctx.fill();
+  // Pupil shines
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(headCX - eyeOffset + pupilR * 0.4, eyeY - pupilR * 0.2, pupilR * 0.3, 0, Math.PI * 2);
+  ctx.arc(headCX + eyeOffset + pupilR * 0.4, eyeY - pupilR * 0.2, pupilR * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
 }
 
 function drawPlayerJetpack(

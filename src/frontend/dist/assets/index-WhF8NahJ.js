@@ -34588,20 +34588,20 @@ const MenuBackground = () => {
     let stars2 = [];
     const initScene = () => {
       clouds = [];
-      const layerCounts = [4, 5, 4];
+      const layerCounts = [2, 3, 3];
       const layerSpeeds = [4, 7, 11];
-      const layerOpacities = [0.35, 0.55, 0.8];
-      const layerSizeBase = [0.55, 0.8, 1.1];
+      const layerOpacities = [0.45, 0.7, 0.95];
+      const layerSizeBase = [0.55, 0.8, 1.15];
       for (let li = 0; li < 3; li++) {
         for (let i = 0; i < layerCounts[li]; i++) {
-          const baseW = (160 + Math.random() * 220) * layerSizeBase[li];
+          const baseW = (200 + Math.random() * 260) * layerSizeBase[li];
           clouds.push({
             x: Math.random() * width,
             y: 60 + Math.random() * (height * 0.85 - 60),
             w: baseW,
             h: baseW * (0.35 + Math.random() * 0.15),
             speed: layerSpeeds[li] * (0.85 + Math.random() * 0.3),
-            opacity: layerOpacities[li] * (0.8 + Math.random() * 0.3),
+            opacity: layerOpacities[li] * (0.85 + Math.random() * 0.15),
             seed: Math.random() * 1e3
           });
         }
@@ -34706,29 +34706,72 @@ const MenuBackground = () => {
       const h2 = c2.h;
       ctx.save();
       ctx.globalAlpha = c2.opacity;
-      const grad = ctx.createRadialGradient(
+      const rand = (i) => {
+        const v2 = Math.sin(c2.seed * 12.9898 + i * 78.233) * 43758.5453;
+        return v2 - Math.floor(v2);
+      };
+      const shadow = ctx.createRadialGradient(
         x3 + w2 / 2,
-        y2 + h2 * 0.3,
+        y2 + h2 * 0.82,
         0,
         x3 + w2 / 2,
-        y2 + h2 * 0.6,
-        w2 * 0.6
+        y2 + h2 * 0.82,
+        w2 * 0.5
       );
-      grad.addColorStop(0, "#ffffff");
-      grad.addColorStop(0.65, "#f6fbff");
-      grad.addColorStop(1, "rgba(220,235,250,0)");
-      ctx.fillStyle = grad;
-      const ell = (px, py, rx, ry) => {
+      shadow.addColorStop(0, "rgba(140,160,190,0.25)");
+      shadow.addColorStop(0.6, "rgba(140,160,190,0.08)");
+      shadow.addColorStop(1, "rgba(140,160,190,0)");
+      ctx.fillStyle = shadow;
+      ctx.beginPath();
+      ctx.ellipse(x3 + w2 / 2, y2 + h2 * 0.9, w2 * 0.5, h2 * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const puffs = [];
+      for (let i = 0; i < 5; i++) {
+        const t = i / 4;
+        puffs.push({
+          px: x3 + w2 * (0.15 + t * 0.7) + (rand(i) - 0.5) * w2 * 0.06,
+          py: y2 + h2 * (0.65 + rand(i + 10) * 0.15),
+          pr: w2 * (0.18 + rand(i + 20) * 0.07)
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        puffs.push({
+          px: x3 + w2 * (0.1 + t * 0.8) + (rand(i + 100) - 0.5) * w2 * 0.08,
+          py: y2 + h2 * (0.4 + rand(i + 110) * 0.2),
+          pr: w2 * (0.16 + rand(i + 120) * 0.1)
+        });
+      }
+      for (let i = 0; i < 4; i++) {
+        const t = (i + 0.5) / 4;
+        puffs.push({
+          px: x3 + w2 * (0.2 + t * 0.6) + (rand(i + 200) - 0.5) * w2 * 0.05,
+          py: y2 + h2 * (0.15 + rand(i + 210) * 0.18),
+          pr: w2 * (0.13 + rand(i + 220) * 0.08)
+        });
+      }
+      ctx.shadowColor = "rgba(255,255,255,0.6)";
+      ctx.shadowBlur = 18;
+      for (const { px, py, pr } of puffs) {
+        const g2 = ctx.createRadialGradient(px, py - pr * 0.15, pr * 0.05, px, py, pr);
+        g2.addColorStop(0, "rgba(255,255,255,1)");
+        g2.addColorStop(0.5, "rgba(255,255,255,0.92)");
+        g2.addColorStop(0.85, "rgba(252,253,254,0.45)");
+        g2.addColorStop(1, "rgba(245,250,255,0)");
+        ctx.fillStyle = g2;
         ctx.beginPath();
-        ctx.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2);
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
         ctx.fill();
-      };
-      ell(x3 + w2 * 0.5, y2 + h2 * 0.72, w2 * 0.5, h2 * 0.42);
-      ell(x3 + w2 * 0.2, y2 + h2 * 0.5, w2 * 0.22, h2 * 0.55);
-      ell(x3 + w2 * 0.4, y2 + h2 * 0.32, w2 * 0.22, h2 * 0.55);
-      ell(x3 + w2 * 0.6, y2 + h2 * 0.28, w2 * 0.24, h2 * 0.6);
-      ell(x3 + w2 * 0.82, y2 + h2 * 0.45, w2 * 0.22, h2 * 0.55);
-      ell(x3 + w2 * 0.95, y2 + h2 * 0.6, w2 * 0.1, h2 * 0.32);
+      }
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+      const hl = ctx.createLinearGradient(0, y2 + h2 * 0.05, 0, y2 + h2 * 0.5);
+      hl.addColorStop(0, "rgba(255,250,225,0.35)");
+      hl.addColorStop(1, "rgba(255,250,225,0)");
+      ctx.fillStyle = hl;
+      ctx.beginPath();
+      ctx.ellipse(x3 + w2 * 0.55, y2 + h2 * 0.25, w2 * 0.32, h2 * 0.22, -0.15, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     };
     const drawClouds = () => {
@@ -37139,6 +37182,11 @@ const STOMP_BOUNCE_FACTOR = 0.6;
 const ENEMY_KILLED_BY_BULLET = 50;
 const ENEMY_KILLED_BY_BOOST = 100;
 const MAX_PARTICLES = 120;
+const AIM_SHOOT_MAX_ANGLE = Math.PI / 3;
+const AIM_IDLE_ANGLE = Math.PI * 0.55;
+const AIM_LERP_SPEED = 0.22;
+const BULLET_SPEED = 12;
+const SHOOT_POSE_MS = 280;
 let playerImage = null;
 let imageLoaded = false;
 function loadPlayerImage() {
@@ -37152,7 +37200,7 @@ function loadPlayerImage() {
   }
 }
 loadPlayerImage();
-const PLAYER_VISUAL_SCALE = 1.35;
+const PLAYER_VISUAL_SCALE = 1.55;
 let bgClouds = [];
 let bgInitialized = false;
 let bgInitWidth = 0;
@@ -38505,37 +38553,155 @@ function drawPlayer(ctx, player, gameTime) {
     const visualH = visualW / ar;
     ctx.save();
     ctx.translate(x3 + width / 2, y2 + height);
-    ctx.scale(player.facing > 0 ? -sx : sx, sy);
+    ctx.scale(sx, sy);
     ctx.drawImage(playerImage, -visualW / 2, -visualH, visualW, visualH);
     ctx.restore();
   } else {
     ctx.save();
-    ctx.fillStyle = "#fbbf24";
-    ctx.strokeStyle = "#92400e";
-    ctx.lineWidth = 2;
+    ctx.fillStyle = "#1a2538";
     ctx.beginPath();
-    ctx.arc(x3 + width / 2, y2 + height / 2, width / 2, 0, Math.PI * 2);
+    ctx.arc(x3 + width / 2, y2 + height * 0.75, width / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
     ctx.restore();
   }
+  if (!hasRocket) {
+    drawHeadAndTrunk(ctx, player, sx, sy);
+  }
   if (hasPropeller && !hasJetpack && !hasRocket) {
+    const px = x3 + width / 2;
+    const py = y2 + height * 0.05;
     ctx.fillStyle = "#ef4444";
     ctx.strokeStyle = "#7a1212";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x3 + width / 2, y2 - 4, 6, 0, Math.PI * 2);
+    ctx.arc(px, py - 6, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#ffd54f";
     ctx.strokeStyle = "#b88a00";
     ctx.save();
-    ctx.translate(x3 + width / 2, y2 - 10);
+    ctx.translate(px, py - 12);
     ctx.rotate(gameTime / 30 % (Math.PI * 2));
     ctx.fillRect(-10, -1.5, 20, 3);
     ctx.strokeRect(-10, -1.5, 20, 3);
     ctx.restore();
   }
+}
+function drawHeadAndTrunk(ctx, player, sx, sy) {
+  ctx.save();
+  ctx.translate(player.x + player.width / 2, player.y + player.height);
+  ctx.scale(sx, sy);
+  const headCX = 0;
+  const headCY = -player.height * 1.05;
+  const headR = player.width * 0.36;
+  const trunkBaseR = 3.5;
+  const trunkTipR = 4.5;
+  const trunkLen = 17;
+  const pivotX = headCX;
+  const pivotY = headCY + headR * 0.1;
+  const dx = Math.sin(player.aimAngle);
+  const dy = -Math.cos(player.aimAngle);
+  const px_ = -dy;
+  const py_ = dx;
+  const baseStartFromPivot = headR * 0.45;
+  const baseX = pivotX + dx * baseStartFromPivot;
+  const baseY = pivotY + dy * baseStartFromPivot;
+  const tipX = pivotX + dx * (baseStartFromPivot + trunkLen);
+  const tipY = pivotY + dy * (baseStartFromPivot + trunkLen);
+  ctx.fillStyle = "#0a1018";
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR + 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(baseX + px_ * (trunkBaseR + 1.8), baseY + py_ * (trunkBaseR + 1.8));
+  ctx.lineTo(tipX + px_ * (trunkTipR + 1.8), tipY + py_ * (trunkTipR + 1.8));
+  ctx.lineTo(tipX - px_ * (trunkTipR + 1.8), tipY - py_ * (trunkTipR + 1.8));
+  ctx.lineTo(baseX - px_ * (trunkBaseR + 1.8), baseY - py_ * (trunkBaseR + 1.8));
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(tipX, tipY, trunkTipR + 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  const headGrad = ctx.createLinearGradient(0, headCY - headR, 0, headCY + headR);
+  headGrad.addColorStop(0, "#a9def9");
+  headGrad.addColorStop(0.5, "#5ab2f0");
+  headGrad.addColorStop(1, "#1e6dad");
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+  ctx.fill();
+  const gradEndX1 = baseX + px_ * trunkBaseR;
+  const gradEndY1 = baseY + py_ * trunkBaseR;
+  const gradEndX2 = baseX - px_ * trunkBaseR;
+  const gradEndY2 = baseY - py_ * trunkBaseR;
+  const trunkGrad = ctx.createLinearGradient(gradEndX1, gradEndY1, gradEndX2, gradEndY2);
+  trunkGrad.addColorStop(0, "#a9def9");
+  trunkGrad.addColorStop(0.5, "#5ab2f0");
+  trunkGrad.addColorStop(1, "#1e6dad");
+  ctx.fillStyle = trunkGrad;
+  ctx.beginPath();
+  ctx.moveTo(baseX + px_ * trunkBaseR, baseY + py_ * trunkBaseR);
+  ctx.lineTo(tipX + px_ * trunkTipR, tipY + py_ * trunkTipR);
+  ctx.lineTo(tipX - px_ * trunkTipR, tipY - py_ * trunkTipR);
+  ctx.lineTo(baseX - px_ * trunkBaseR, baseY - py_ * trunkBaseR);
+  ctx.closePath();
+  ctx.fill();
+  const muzzleGrad = ctx.createRadialGradient(tipX, tipY, 0.3, tipX, tipY, trunkTipR);
+  muzzleGrad.addColorStop(0, "#7fc7f3");
+  muzzleGrad.addColorStop(0.7, "#2a86c4");
+  muzzleGrad.addColorStop(1, "#0e4d80");
+  ctx.fillStyle = muzzleGrad;
+  ctx.beginPath();
+  ctx.arc(tipX, tipY, trunkTipR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#0a1018";
+  ctx.beginPath();
+  ctx.arc(tipX + dx * 0.3, tipY + dy * 0.3, trunkTipR * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(headCX, headCY + headR * 0.55, headR * 0.85, headR * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.beginPath();
+  ctx.ellipse(headCX - headR * 0.25, headCY - headR * 0.55, headR * 0.35, headR * 0.2, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  const eyeOffset = headR * 0.32;
+  const eyeY = headCY - headR * 0.05;
+  const eyeR = headR * 0.16;
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#0a1018";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(headCX - eyeOffset, eyeY, eyeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(headCX + eyeOffset, eyeY, eyeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#0a1018";
+  const pupilR = eyeR * 0.55;
+  ctx.beginPath();
+  ctx.arc(headCX - eyeOffset, eyeY + eyeR * 0.1, pupilR, 0, Math.PI * 2);
+  ctx.arc(headCX + eyeOffset, eyeY + eyeR * 0.1, pupilR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(headCX - eyeOffset + pupilR * 0.4, eyeY - pupilR * 0.2, pupilR * 0.3, 0, Math.PI * 2);
+  ctx.arc(headCX + eyeOffset + pupilR * 0.4, eyeY - pupilR * 0.2, pupilR * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 function drawPlayerJetpack(ctx, x3, y2, gameTime) {
   ctx.save();
@@ -39268,7 +39434,9 @@ function useGameLogic(canvasRef, gameState, setGameState, onJump) {
       hasRocket: false,
       rocketTime: 0,
       facing: 1,
-      squash: 0
+      squash: 0,
+      // Aim angle: starts pointing to the right side (+PI/2 = right horizontal)
+      aimAngle: Math.PI / 2
     };
     platformsRef.current = [];
     enemiesRef.current = [];
@@ -39415,6 +39583,20 @@ function useGameLogic(canvasRef, gameState, setGameState, onJump) {
       }
       player.vx = moveDir * MOVE_SPEED;
       player.x += player.vx;
+      const sinceShot = gameTimeRef.current - lastShotTimeRef.current;
+      let targetAim;
+      if (sinceShot < SHOOT_POSE_MS) {
+        targetAim = Math.max(
+          -AIM_SHOOT_MAX_ANGLE,
+          Math.min(AIM_SHOOT_MAX_ANGLE, player.aimAngle)
+        );
+      } else {
+        targetAim = player.facing < 0 ? -AIM_IDLE_ANGLE : AIM_IDLE_ANGLE;
+      }
+      let delta = targetAim - player.aimAngle;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      player.aimAngle += delta * AIM_LERP_SPEED;
       if (player.x < -player.width) player.x = cw;
       else if (player.x > cw) player.x = -player.width;
       let activeBoost = null;
@@ -39587,6 +39769,7 @@ function useGameLogic(canvasRef, gameState, setGameState, onJump) {
         comboRef.current = 0;
       }
       bulletsRef.current = bulletsRef.current.filter((b2) => {
+        b2.x += b2.vx;
         b2.y += b2.vy;
         for (const e of enemiesRef.current) {
           if (e.alive && b2.x > e.x && b2.x < e.x + e.width && b2.y > e.y && b2.y < e.y + e.height) {
@@ -39638,7 +39821,9 @@ function useGameLogic(canvasRef, gameState, setGameState, onJump) {
       platformsRef.current = platformsRef.current.filter((p2) => p2.y < removalThreshold);
       enemiesRef.current = enemiesRef.current.filter((e) => e.y < removalThreshold);
       powerUpsRef.current = powerUpsRef.current.filter((p2) => p2.y < removalThreshold);
-      bulletsRef.current = bulletsRef.current.filter((b2) => b2.y < removalThreshold + 50);
+      bulletsRef.current = bulletsRef.current.filter(
+        (b2) => b2.y < removalThreshold + 50 && b2.x > -50 && b2.x < cw + 50
+      );
       if (gameTimeRef.current - lastHudPushRef.current > 150) {
         lastHudPushRef.current = gameTimeRef.current;
         setHud({ combo: comboRef.current, boost: activeBoost });
@@ -39667,37 +39852,52 @@ function useGameLogic(canvasRef, gameState, setGameState, onJump) {
     ]
   );
   const SHOOT_COOLDOWN_MS = 250;
-  const tryShoot = reactExports.useCallback(() => {
+  const tryShoot = reactExports.useCallback((tapX, _tapY) => {
     const player = playerRef.current;
     if (!player) return;
     if (gameStateRef.current !== "playing") return;
     const now2 = gameTimeRef.current;
     if (now2 - lastShotTimeRef.current < SHOOT_COOLDOWN_MS) return;
     lastShotTimeRef.current = now2;
-    const mouthSide = player.facing < 0 ? -1 : 1;
-    const mouthX = player.x + player.width / 2 + mouthSide * (player.width * 0.55);
-    const mouthY = player.y + player.height * 0.25;
+    let shootAngle = 0;
+    if (tapX !== void 0) {
+      const playerCx = player.x + player.width / 2;
+      const dx = tapX - playerCx;
+      const k2 = Math.max(-1, Math.min(1, dx / 80));
+      shootAngle = k2 * AIM_SHOOT_MAX_ANGLE;
+    }
+    const headR = player.width * 0.36;
+    const pivotX = player.x + player.width / 2;
+    const pivotY = player.y + player.height * (1 - 1.05) + headR * 0.1;
+    const barrelLen = headR * 0.45 + 17;
+    const dirX = Math.sin(shootAngle);
+    const dirY = -Math.cos(shootAngle);
+    const tipX = pivotX + dirX * barrelLen;
+    const tipY = pivotY + dirY * barrelLen;
     bulletsRef.current.push({
-      x: mouthX,
-      y: mouthY,
-      vy: -11
+      x: tipX,
+      y: tipY,
+      vx: dirX * BULLET_SPEED,
+      vy: dirY * BULLET_SPEED
     });
-    for (let i = 0; i < 6; i++) {
-      const ang = (Math.random() - 0.5) * 0.8 + (mouthSide < 0 ? Math.PI : 0);
-      const sp = 1.5 + Math.random() * 2;
+    for (let i = 0; i < 8; i++) {
+      const spread = (Math.random() - 0.5) * 0.6;
+      const muzzleAng = Math.atan2(dirY, dirX) + spread;
+      const sp = 2 + Math.random() * 2;
       particlesRef.current.push({
-        x: mouthX + mouthSide * 4,
-        y: mouthY,
-        vx: Math.cos(ang) * sp,
-        vy: Math.sin(ang) * sp,
-        life: 14,
-        maxLife: 14,
-        size: 1.5 + Math.random() * 1.8,
-        color: i < 3 ? "rgba(255,230,120,0.95)" : "rgba(255,255,255,0.9)",
+        x: tipX + dirX * 2,
+        y: tipY + dirY * 2,
+        vx: Math.cos(muzzleAng) * sp,
+        vy: Math.sin(muzzleAng) * sp,
+        life: 16,
+        maxLife: 16,
+        size: 1.6 + Math.random() * 1.8,
+        color: i < 4 ? "rgba(255,230,120,0.95)" : "rgba(255,255,255,0.95)",
         gravity: 0,
         fade: true
       });
     }
+    player.aimAngle = shootAngle;
     playShootSound();
   }, []);
   const handleKeyDown = reactExports.useCallback(
@@ -39936,7 +40136,10 @@ const Game = ({ mode, onBackToHome }) => {
           onPointerDown: (e) => {
             if (gameState !== "playing") return;
             e.preventDefault();
-            shoot();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const tapX = e.clientX - rect.left;
+            const tapY = e.clientY - rect.top;
+            shoot(tapX, tapY);
           }
         }
       ),
@@ -40072,41 +40275,6 @@ const Home = () => {
   };
   const cloudCount = isAuthenticated && userProgress ? Number(userProgress.clouds) : 0;
   const level = isAuthenticated && userProgress ? Number(userProgress.level) : 0;
-  const parallaxRef = reactExports.useRef(null);
-  reactExports.useEffect(() => {
-    const el = parallaxRef.current;
-    if (!el) return;
-    let raf = 0;
-    let tx = 0;
-    let ty = 0;
-    const apply = () => {
-      el.style.setProperty("--tx", String(tx));
-      el.style.setProperty("--ty", String(ty));
-      raf = 0;
-    };
-    const onMove = (e) => {
-      const rect = el.getBoundingClientRect();
-      const cx2 = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      tx = (e.clientX - cx2) / window.innerWidth;
-      ty = (e.clientY - cy) / window.innerHeight;
-      tx = Math.max(-1, Math.min(1, tx));
-      ty = Math.max(-1, Math.min(1, ty));
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-    const onLeave = () => {
-      tx = 0;
-      ty = 0;
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerleave", onLeave);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerleave", onLeave);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
   const [displayClouds, setDisplayClouds] = reactExports.useState(cloudCount);
   const displayCloudsRef = reactExports.useRef(displayClouds);
   reactExports.useEffect(() => {
@@ -40208,97 +40376,66 @@ const Home = () => {
         )
       ] })
     ] }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 z-10 flex flex-col items-center justify-center px-5 py-20 md:py-24", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        ref: parallaxRef,
-        className: "relative w-full max-w-md mx-auto flex flex-col items-center text-center animate-fade-in-up",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/30 backdrop-blur-md border border-white/50 shadow-sm", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "h-3 w-3 text-amber-500" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] md:text-[11px] font-bold uppercase tracking-[0.25em] text-sky-900/80", children: "Built on Internet Computer" })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "relative mb-2 select-none", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "h1",
-            {
-              className: "cloud-jump-title text-[2.85rem] sm:text-5xl md:text-6xl lg:text-7xl leading-[0.95] font-black tracking-tight",
-              "data-text": "Cloud Jump",
-              children: "Cloud Jump"
-            }
-          ) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm md:text-base text-sky-900/80 font-medium mb-6 max-w-[280px]", children: [
-            "Climb endless skies. Stomp the storm.",
-            " ",
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-amber-600 font-bold", children: "Mint your altitude." })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "relative mb-7 select-none pointer-events-none",
-              style: {
-                transform: "translate3d(calc(var(--tx, 0) * -6px), calc(var(--ty, 0) * -4px), 0)",
-                transition: "transform 0.15s ease-out"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute -inset-12 rounded-full bg-gradient-radial from-sky-200/60 via-sky-200/20 to-transparent blur-2xl animate-pulse-gentle" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 bg-gradient-radial from-amber-300/30 to-transparent blur-2xl" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "img",
-                  {
-                    src: "/assets/player.png",
-                    alt: "Cloud Jump Character",
-                    className: "relative w-36 h-36 md:w-44 md:h-44 object-contain animate-character-float drop-shadow-[0_18px_30px_rgba(40,60,90,0.45)]",
-                    draggable: false
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute -bottom-3 left-1/2 -translate-x-1/2 w-44 md:w-56", children: /* @__PURE__ */ jsxRuntimeExports.jsx(CloudPedestal, {}) }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(FloatingSparkles, {})
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full max-w-xs space-y-3", children: !isAuthenticated ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              PrimaryButton,
-              {
-                onClick: handlePlayAsGuest,
-                variant: "emerald",
-                primary: true,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Play, { className: "h-5 w-5" }),
-                  "Play Now",
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "h-4 w-4 opacity-70" })
-                ]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              PrimaryButton,
-              {
-                onClick: handleLogin,
-                disabled: isLoggingIn,
-                variant: "sky",
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(LogIn, { className: "h-5 w-5" }),
-                  isLoggingIn ? "Connecting..." : "Sign in with ICP"
-                ]
-              }
-            )
-          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            PrimaryButton,
-            {
-              onClick: handlePlayAuthenticated,
-              disabled: progressLoading,
-              variant: "emerald",
-              primary: true,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Play, { className: "h-5 w-5" }),
-                "Start Climbing",
-                /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "h-4 w-4 opacity-70" })
-              ]
-            }
-          ) })
-        ]
-      }
-    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 z-10 flex flex-col items-center justify-center px-5 py-20 md:py-24", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative w-full max-w-md mx-auto flex flex-col items-center text-center animate-fade-in-up", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/30 backdrop-blur-md border border-white/50 shadow-sm", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "h-3 w-3 text-amber-500" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] md:text-[11px] font-bold uppercase tracking-[0.25em] text-sky-900/80", children: "Built on Internet Computer" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "relative mb-2 select-none", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "h1",
+        {
+          className: "cloud-jump-title text-[2.85rem] sm:text-5xl md:text-6xl lg:text-7xl leading-[0.95] font-black tracking-tight",
+          "data-text": "Cloud Jump",
+          children: "Cloud Jump"
+        }
+      ) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm md:text-base text-sky-900/80 font-medium mb-6 max-w-[280px]", children: [
+        "Climb endless skies. Stomp the storm.",
+        " ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-amber-600 font-bold", children: "Mint your altitude." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-10" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full max-w-xs space-y-3", children: !isAuthenticated ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          PrimaryButton,
+          {
+            onClick: handlePlayAsGuest,
+            variant: "emerald",
+            primary: true,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Play, { className: "h-5 w-5" }),
+              "Play Now",
+              /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "h-4 w-4 opacity-70" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          PrimaryButton,
+          {
+            onClick: handleLogin,
+            disabled: isLoggingIn,
+            variant: "sky",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(LogIn, { className: "h-5 w-5" }),
+              isLoggingIn ? "Connecting..." : "Sign in with ICP"
+            ]
+          }
+        )
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        PrimaryButton,
+        {
+          onClick: handlePlayAuthenticated,
+          disabled: progressLoading,
+          variant: "emerald",
+          primary: true,
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Play, { className: "h-5 w-5" }),
+            "Start Climbing",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { className: "h-4 w-4 opacity-70" })
+          ]
+        }
+      ) })
+    ] }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute bottom-0 inset-x-0 z-10 px-3 pb-3 md:px-5 md:pb-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-auto max-w-md", children: statsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-2xl bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgba(80,120,180,0.25)] px-4 py-3 text-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-sky-900/70 animate-pulse", children: "Loading worlds…" }) }) : globalStats ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative rounded-2xl bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgba(80,120,180,0.25)] overflow-hidden", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-4 px-2 py-2.5", children: [
@@ -40377,71 +40514,6 @@ const IconBtn = ({ onClick, label, ring, children }) => /* @__PURE__ */ jsxRunti
     ]
   }
 );
-const CloudPedestal = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 220 60", className: "w-full", role: "img", "aria-label": "Cloud pedestal", children: [
-  /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Cloud pedestal" }),
-  /* @__PURE__ */ jsxRuntimeExports.jsxs("defs", { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("radialGradient", { id: "cp-body", cx: "50%", cy: "40%", r: "60%", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "0%", stopColor: "#ffffff" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "60%", stopColor: "#f4faff" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "100%", stopColor: "#d8e7f5" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("linearGradient", { id: "cp-shadow", x1: "0", y1: "0", x2: "0", y2: "1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "0%", stopColor: "rgba(120,150,190,0)" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "100%", stopColor: "rgba(120,150,190,0.32)" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("filter", { id: "cp-blur", children: /* @__PURE__ */ jsxRuntimeExports.jsx("feGaussianBlur", { stdDeviation: "4" }) })
-  ] }),
-  /* @__PURE__ */ jsxRuntimeExports.jsx("g", { filter: "url(#cp-blur)", opacity: "0.55", children: /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "110", cy: "42", rx: "100", ry: "16", fill: "#a8c4de" }) }),
-  /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { fill: "url(#cp-body)", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "110", cy: "40", rx: "100", ry: "18" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "50", cy: "30", rx: "34", ry: "22" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "85", cy: "20", rx: "32", ry: "24" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "130", cy: "18", rx: "38", ry: "26" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "170", cy: "28", rx: "34", ry: "22" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "205", cy: "36", rx: "14", ry: "14" })
-  ] }),
-  /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "110", cy: "48", rx: "86", ry: "10", fill: "url(#cp-shadow)" }),
-  /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "ellipse",
-    {
-      cx: "92",
-      cy: "14",
-      rx: "28",
-      ry: "6",
-      fill: "rgba(255,255,255,0.7)",
-      transform: "rotate(-12 92 14)"
-    }
-  ),
-  /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { fill: "#ffffff", opacity: "0.9", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "60", cy: "18", r: "1.2" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "160", cy: "14", r: "1.2" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "125", cy: "32", r: "1" })
-  ] })
-] });
-const FloatingSparkles = () => {
-  const sparkles = [
-    { id: "s1", top: "10%", left: "8%", delay: "0s", scale: 1 },
-    { id: "s2", top: "20%", left: "92%", delay: "0.6s", scale: 0.8 },
-    { id: "s3", top: "50%", left: "98%", delay: "1.2s", scale: 1.1 },
-    { id: "s4", top: "75%", left: "4%", delay: "0.3s", scale: 0.9 },
-    { id: "s5", top: "5%", left: "55%", delay: "0.9s", scale: 0.7 },
-    { id: "s6", top: "85%", left: "70%", delay: "1.5s", scale: 1 }
-  ];
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: sparkles.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "span",
-    {
-      className: "absolute w-1.5 h-1.5 rounded-full bg-white animate-sparkle pointer-events-none",
-      style: {
-        top: s2.top,
-        left: s2.left,
-        transform: `translate(-50%, -50%) scale(${s2.scale})`,
-        animationDelay: s2.delay,
-        boxShadow: "0 0 8px 2px rgba(255,250,180,0.9), 0 0 18px 4px rgba(255,220,120,0.5)"
-      }
-    },
-    s2.id
-  )) });
-};
 const STAT_COLORS = {
   sky: {
     text: "text-sky-700",

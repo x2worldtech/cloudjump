@@ -15,8 +15,12 @@ export interface Player {
   hasRocket: boolean;
   rocketTime: number;
   // Visual feedback
-  facing: 1 | -1; // last move direction for sprite mirroring
+  facing: 1 | -1; // last move direction (currently unused for sprite mirroring)
   squash: number; // 0..1 squash-and-stretch amount on landing
+  // Aim angle for the top-mounted barrel, in radians.
+  // 0 = straight up, negative = tilted left, positive = tilted right.
+  // Clamped to a small cone (about ±60 degrees from vertical).
+  aimAngle: number;
 }
 
 export interface Platform {
@@ -65,6 +69,7 @@ export interface PowerUp {
 export interface Bullet {
   x: number;
   y: number;
+  vx: number;
   vy: number;
 }
 

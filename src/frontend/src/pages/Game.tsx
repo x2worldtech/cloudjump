@@ -260,11 +260,13 @@ const Game: React.FC<GameProps> = ({ mode, onBackToHome }) => {
           style={{ touchAction: "none" }}
           onPointerDown={(e) => {
             if (gameState !== "playing") return;
-            // Don't fire from synthetic clicks on the pause button - those
-            // bubble up but won't have a real pointerId from the canvas itself
-            // (the button stops propagation via React's own handler).
             e.preventDefault();
-            shoot();
+            // Pass tap position in canvas CSS pixels so the shot can lean
+            // toward the tapped X within the allowed shoot-cone.
+            const rect = e.currentTarget.getBoundingClientRect();
+            const tapX = e.clientX - rect.left;
+            const tapY = e.clientY - rect.top;
+            shoot(tapX, tapY);
           }}
         />
 

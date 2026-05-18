@@ -48,21 +48,22 @@ const MenuBackground: React.FC = () => {
 
     const initScene = () => {
       clouds = [];
-      // 3 depth layers, smaller clouds further away
-      const layerCounts = [4, 5, 4];
-      const layerSpeeds = [4, 7, 11]; // CSS-px per second
-      const layerOpacities = [0.35, 0.55, 0.8];
-      const layerSizeBase = [0.55, 0.8, 1.1];
+      // 3 depth layers, smaller clouds further away.
+      // Counts kept modest because each cloud is now built from many puffs.
+      const layerCounts = [2, 3, 3];
+      const layerSpeeds = [4, 7, 11];
+      const layerOpacities = [0.45, 0.7, 0.95];
+      const layerSizeBase = [0.55, 0.8, 1.15];
       for (let li = 0; li < 3; li++) {
         for (let i = 0; i < layerCounts[li]; i++) {
-          const baseW = (160 + Math.random() * 220) * layerSizeBase[li];
+          const baseW = (200 + Math.random() * 260) * layerSizeBase[li];
           clouds.push({
             x: Math.random() * width,
             y: 60 + Math.random() * (height * 0.85 - 60),
             w: baseW,
             h: baseW * (0.35 + Math.random() * 0.15),
             speed: layerSpeeds[li] * (0.85 + Math.random() * 0.3),
-            opacity: layerOpacities[li] * (0.8 + Math.random() * 0.3),
+            opacity: layerOpacities[li] * (0.85 + Math.random() * 0.15),
             seed: Math.random() * 1000,
           });
         }
@@ -176,37 +177,100 @@ const MenuBackground: React.FC = () => {
     };
 
     const drawCloud = (c: Cloud) => {
+      // Realistic cloud: many overlapping soft white puffs with subtle
+      // shading. The cloud is mostly white; volume comes from a soft bottom
+      // shadow and a top highlight, not from visible "bubbles".
       const x = c.x;
       const y = c.y;
       const w = c.w;
       const h = c.h;
+
       ctx.save();
       ctx.globalAlpha = c.opacity;
-      const grad = ctx.createRadialGradient(
+
+      // Pseudo-random based on cloud seed
+      const rand = (i: number) => {
+        const v = Math.sin(c.seed * 12.9898 + i * 78.233) * 43758.5453;
+        return v - Math.floor(v);
+      };
+
+      // ---- Bottom shadow band (cloud weight, very subtle) ----
+      const shadow = ctx.createRadialGradient(
         x + w / 2,
-        y + h * 0.3,
+        y + h * 0.82,
         0,
         x + w / 2,
-        y + h * 0.6,
-        w * 0.6,
+        y + h * 0.82,
+        w * 0.5,
       );
-      grad.addColorStop(0, "#ffffff");
-      grad.addColorStop(0.65, "#f6fbff");
-      grad.addColorStop(1, "rgba(220,235,250,0)");
-      ctx.fillStyle = grad;
+      shadow.addColorStop(0, "rgba(140,160,190,0.25)");
+      shadow.addColorStop(0.6, "rgba(140,160,190,0.08)");
+      shadow.addColorStop(1, "rgba(140,160,190,0)");
+      ctx.fillStyle = shadow;
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, y + h * 0.9, w * 0.5, h * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Six overlapping ellipses for a soft fluffy shape
-      const ell = (px: number, py: number, rx: number, ry: number) => {
+      // ---- Generate puff positions ----
+      // Smaller puffs concentrated to form a continuous mass, not visible bubbles.
+      const puffs: { px: number; py: number; pr: number }[] = [];
+      // Bottom row (anchors)
+      for (let i = 0; i < 5; i++) {
+        const t = i / 4;
+        puffs.push({
+          px: x + w * (0.15 + t * 0.7) + (rand(i) - 0.5) * w * 0.06,
+          py: y + h * (0.65 + rand(i + 10) * 0.15),
+          pr: w * (0.18 + rand(i + 20) * 0.07),
+        });
+      }
+      // Middle row (the bulk)
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        puffs.push({
+          px: x + w * (0.1 + t * 0.8) + (rand(i + 100) - 0.5) * w * 0.08,
+          py: y + h * (0.4 + rand(i + 110) * 0.2),
+          pr: w * (0.16 + rand(i + 120) * 0.1),
+        });
+      }
+      // Top cauliflower bumps (smaller, rounded crown)
+      for (let i = 0; i < 4; i++) {
+        const t = (i + 0.5) / 4;
+        puffs.push({
+          px: x + w * (0.2 + t * 0.6) + (rand(i + 200) - 0.5) * w * 0.05,
+          py: y + h * (0.15 + rand(i + 210) * 0.18),
+          pr: w * (0.13 + rand(i + 220) * 0.08),
+        });
+      }
+
+      // ---- Single dense pass: solid white core fading to transparent at edges ----
+      // Use shadowBlur to soften the look further and give a halo at every puff,
+      // which fuses neighbors into a continuous shape.
+      ctx.shadowColor = "rgba(255,255,255,0.6)";
+      ctx.shadowBlur = 18;
+      for (const { px, py, pr } of puffs) {
+        const g = ctx.createRadialGradient(px, py - pr * 0.15, pr * 0.05, px, py, pr);
+        g.addColorStop(0, "rgba(255,255,255,1)");
+        g.addColorStop(0.5, "rgba(255,255,255,0.92)");
+        g.addColorStop(0.85, "rgba(252,253,254,0.45)");
+        g.addColorStop(1, "rgba(245,250,255,0)");
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2);
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
         ctx.fill();
-      };
-      ell(x + w * 0.5, y + h * 0.72, w * 0.5, h * 0.42);
-      ell(x + w * 0.2, y + h * 0.5, w * 0.22, h * 0.55);
-      ell(x + w * 0.4, y + h * 0.32, w * 0.22, h * 0.55);
-      ell(x + w * 0.6, y + h * 0.28, w * 0.24, h * 0.6);
-      ell(x + w * 0.82, y + h * 0.45, w * 0.22, h * 0.55);
-      ell(x + w * 0.95, y + h * 0.6, w * 0.1, h * 0.32);
+      }
+
+      // Reset shadow before highlights
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+
+      // ---- Top sun-side highlight (single soft band across the top) ----
+      const hl = ctx.createLinearGradient(0, y + h * 0.05, 0, y + h * 0.5);
+      hl.addColorStop(0, "rgba(255,250,225,0.35)");
+      hl.addColorStop(1, "rgba(255,250,225,0)");
+      ctx.fillStyle = hl;
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.55, y + h * 0.25, w * 0.32, h * 0.22, -0.15, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.restore();
     };

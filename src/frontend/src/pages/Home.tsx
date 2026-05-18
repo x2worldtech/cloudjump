@@ -60,45 +60,6 @@ const Home: React.FC = () => {
   const level =
     isAuthenticated && userProgress ? Number(userProgress.level) : 0;
 
-  // Pointer parallax: subtle tilt of the character based on cursor / finger.
-  // CSS variables --tx, --ty in fractional units (-1..1).
-  const parallaxRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = parallaxRef.current;
-    if (!el) return;
-    let raf = 0;
-    let tx = 0;
-    let ty = 0;
-    const apply = () => {
-      el.style.setProperty("--tx", String(tx));
-      el.style.setProperty("--ty", String(ty));
-      raf = 0;
-    };
-    const onMove = (e: PointerEvent) => {
-      const rect = el.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      tx = (e.clientX - cx) / window.innerWidth;
-      ty = (e.clientY - cy) / window.innerHeight;
-      // clamp
-      tx = Math.max(-1, Math.min(1, tx));
-      ty = Math.max(-1, Math.min(1, ty));
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-    const onLeave = () => {
-      tx = 0;
-      ty = 0;
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerleave", onLeave);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerleave", onLeave);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
   // Smooth-tween the cloud counter so it doesn't snap.
   const [displayClouds, setDisplayClouds] = useState(cloudCount);
   const displayCloudsRef = useRef(displayClouds);
@@ -224,10 +185,7 @@ const Home: React.FC = () => {
 
       {/* ---------- MAIN CONTENT ---------- */}
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-5 py-20 md:py-24">
-        <div
-          ref={parallaxRef}
-          className="relative w-full max-w-md mx-auto flex flex-col items-center text-center animate-fade-in-up"
-        >
+        <div className="relative w-full max-w-md mx-auto flex flex-col items-center text-center animate-fade-in-up">
           {/* Subtitle eyebrow */}
           <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/30 backdrop-blur-md border border-white/50 shadow-sm">
             <Sparkles className="h-3 w-3 text-amber-500" />
@@ -252,36 +210,8 @@ const Home: React.FC = () => {
             <span className="text-amber-600 font-bold">Mint your altitude.</span>
           </p>
 
-          {/* Character on cloud platform pedestal */}
-          <div
-            className="relative mb-7 select-none pointer-events-none"
-            style={{
-              transform:
-                "translate3d(calc(var(--tx, 0) * -6px), calc(var(--ty, 0) * -4px), 0)",
-              transition: "transform 0.15s ease-out",
-            }}
-          >
-            {/* Soft cyan glow under character */}
-            <div className="absolute -inset-12 rounded-full bg-gradient-radial from-sky-200/60 via-sky-200/20 to-transparent blur-2xl animate-pulse-gentle" />
-
-            {/* Amber halo */}
-            <div className="absolute inset-0 bg-gradient-radial from-amber-300/30 to-transparent blur-2xl" />
-
-            <img
-              src="/assets/player.png"
-              alt="Cloud Jump Character"
-              className="relative w-36 h-36 md:w-44 md:h-44 object-contain animate-character-float drop-shadow-[0_18px_30px_rgba(40,60,90,0.45)]"
-              draggable={false}
-            />
-
-            {/* Pedestal cloud */}
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-44 md:w-56">
-              <CloudPedestal />
-            </div>
-
-            {/* Floating sparkles around character */}
-            <FloatingSparkles />
-          </div>
+          {/* Spacer where the character used to be */}
+          <div className="mb-10" />
 
           {/* CTA Buttons */}
           <div className="w-full max-w-xs space-y-3">
@@ -405,90 +335,6 @@ const IconBtn: React.FC<{
     {children}
   </button>
 );
-
-/**
- * Decorative cloud pedestal under the character.
- * Pure SVG so it scales crisply at any size.
- */
-const CloudPedestal: React.FC = () => (
-  <svg viewBox="0 0 220 60" className="w-full" role="img" aria-label="Cloud pedestal">
-    <title>Cloud pedestal</title>
-    <defs>
-      <radialGradient id="cp-body" cx="50%" cy="40%" r="60%">
-        <stop offset="0%" stopColor="#ffffff" />
-        <stop offset="60%" stopColor="#f4faff" />
-        <stop offset="100%" stopColor="#d8e7f5" />
-      </radialGradient>
-      <linearGradient id="cp-shadow" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="rgba(120,150,190,0)" />
-        <stop offset="100%" stopColor="rgba(120,150,190,0.32)" />
-      </linearGradient>
-      <filter id="cp-blur">
-        <feGaussianBlur stdDeviation="4" />
-      </filter>
-    </defs>
-    {/* Outline halo via blurred copy underneath */}
-    <g filter="url(#cp-blur)" opacity="0.55">
-      <ellipse cx="110" cy="42" rx="100" ry="16" fill="#a8c4de" />
-    </g>
-    {/* Body: multiple ellipses */}
-    <g fill="url(#cp-body)">
-      <ellipse cx="110" cy="40" rx="100" ry="18" />
-      <ellipse cx="50" cy="30" rx="34" ry="22" />
-      <ellipse cx="85" cy="20" rx="32" ry="24" />
-      <ellipse cx="130" cy="18" rx="38" ry="26" />
-      <ellipse cx="170" cy="28" rx="34" ry="22" />
-      <ellipse cx="205" cy="36" rx="14" ry="14" />
-    </g>
-    {/* Bottom shadow */}
-    <ellipse cx="110" cy="48" rx="86" ry="10" fill="url(#cp-shadow)" />
-    {/* Specular highlight */}
-    <ellipse
-      cx="92"
-      cy="14"
-      rx="28"
-      ry="6"
-      fill="rgba(255,255,255,0.7)"
-      transform="rotate(-12 92 14)"
-    />
-    {/* Tiny sparkles */}
-    <g fill="#ffffff" opacity="0.9">
-      <circle cx="60" cy="18" r="1.2" />
-      <circle cx="160" cy="14" r="1.2" />
-      <circle cx="125" cy="32" r="1" />
-    </g>
-  </svg>
-);
-
-const FloatingSparkles: React.FC = () => {
-  // Static positions, animated via CSS keyframes with staggered delays.
-  const sparkles = [
-    { id: "s1", top: "10%", left: "8%", delay: "0s", scale: 1 },
-    { id: "s2", top: "20%", left: "92%", delay: "0.6s", scale: 0.8 },
-    { id: "s3", top: "50%", left: "98%", delay: "1.2s", scale: 1.1 },
-    { id: "s4", top: "75%", left: "4%", delay: "0.3s", scale: 0.9 },
-    { id: "s5", top: "5%", left: "55%", delay: "0.9s", scale: 0.7 },
-    { id: "s6", top: "85%", left: "70%", delay: "1.5s", scale: 1 },
-  ];
-  return (
-    <>
-      {sparkles.map((s) => (
-        <span
-          key={s.id}
-          className="absolute w-1.5 h-1.5 rounded-full bg-white animate-sparkle pointer-events-none"
-          style={{
-            top: s.top,
-            left: s.left,
-            transform: `translate(-50%, -50%) scale(${s.scale})`,
-            animationDelay: s.delay,
-            boxShadow:
-              "0 0 8px 2px rgba(255,250,180,0.9), 0 0 18px 4px rgba(255,220,120,0.5)",
-          }}
-        />
-      ))}
-    </>
-  );
-};
 
 const STAT_COLORS = {
   sky: {

@@ -1,4 +1,8 @@
 import {
+  AIM_IDLE_ANGLE,
+  AIM_LERP_SPEED,
+  AIM_SHOOT_MAX_ANGLE,
+  BULLET_SPEED,
   ENEMY_KILLED_BY_BOOST,
   ENEMY_KILLED_BY_BULLET,
   GRAVITY,
@@ -15,6 +19,7 @@ import {
   PROPELLER_DURATION,
   ROCKET_BOOST,
   ROCKET_DURATION,
+  SHOOT_POSE_MS,
   SPRING_BOOST,
   STOMP_BASE_SCORE,
   STOMP_BOUNCE_FACTOR,
@@ -643,6 +648,8 @@ export function useGameLogic(
       rocketTime: 0,
       facing: 1,
       squash: 0,
+      // Aim angle: starts pointing to the right side (+PI/2 = right horizontal)
+      aimAngle: Math.PI / 2,
     };
 
     platformsRef.current = [];
@@ -825,6 +832,31 @@ export function useGameLogic(
       }
       player.vx = moveDir * MOVE_SPEED;
       player.x += player.vx;
+
+      // ----- Aim angle interpolation -----
+      // Default target: idle side-pose, pointing toward `facing` direction.
+      // Right side = +AIM_IDLE_ANGLE, left side = -AIM_IDLE_ANGLE.
+      // After a shot, hold the upward shoot-pose for SHOOT_POSE_MS, then
+      // ease back to idle.
+      const sinceShot = gameTimeRef.current - lastShotTimeRef.current;
+      let targetAim: number;
+      if (sinceShot < SHOOT_POSE_MS) {
+        // Hold the shot direction (already clamped to AIM_SHOOT_MAX_ANGLE in tryShoot).
+        // We leave aimAngle alone here so the player.aimAngle set by tryShoot
+        // stays put; just compute the same value for the lerp.
+        targetAim = Math.max(
+          -AIM_SHOOT_MAX_ANGLE,
+          Math.min(AIM_SHOOT_MAX_ANGLE, player.aimAngle),
+        );
+      } else {
+        targetAim = player.facing < 0 ? -AIM_IDLE_ANGLE : AIM_IDLE_ANGLE;
+      }
+      // Lerp toward target (shortest angular distance)
+      let delta = targetAim - player.aimAngle;
+      // Normalize to [-PI, PI]
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      player.aimAngle += delta * AIM_LERP_SPEED;
 
       // Wrap horizontally
       if (player.x < -player.width) player.x = cw;
@@ -1062,6 +1094,7 @@ export function useGameLogic(
 
       // Bullets
       bulletsRef.current = bulletsRef.current.filter((b) => {
+        b.x += b.vx;
         b.y += b.vy;
         for (const e of enemiesRef.current) {
           if (
@@ -1129,7 +1162,9 @@ export function useGameLogic(
       platformsRef.current = platformsRef.current.filter((p) => p.y < removalThreshold);
       enemiesRef.current = enemiesRef.current.filter((e) => e.y < removalThreshold);
       powerUpsRef.current = powerUpsRef.current.filter((p) => p.y < removalThreshold);
-      bulletsRef.current = bulletsRef.current.filter((b) => b.y < removalThreshold + 50);
+      bulletsRef.current = bulletsRef.current.filter(
+        (b) => b.y < removalThreshold + 50 && b.x > -50 && b.x < cw + 50,
+      );
 
       // HUD push (throttled)
       if (gameTimeRef.current - lastHudPushRef.current > 150) {
@@ -1163,10 +1198,12 @@ export function useGameLogic(
     ],
   );
 
-  // Shoot: spawn a bullet from the player's mouth, with cooldown,
-  // a muzzle-flash particle burst, and a punchy sound.
+  // Shoot: spawn a bullet from the player's mouth (top of head), with cooldown,
+  // a muzzle-flash burst, and a punchy sound. Optionally takes a tap target
+  // in canvas-CSS coordinates so the shot leans toward the tapped X within
+  // the allowed shoot-cone.
   const SHOOT_COOLDOWN_MS = 250;
-  const tryShoot = useCallback(() => {
+  const tryShoot = useCallback((tapX?: number, _tapY?: number) => {
     const player = playerRef.current;
     if (!player) return;
     if (gameStateRef.current !== "playing") return;
@@ -1174,37 +1211,65 @@ export function useGameLogic(
     if (now - lastShotTimeRef.current < SHOOT_COOLDOWN_MS) return;
     lastShotTimeRef.current = now;
 
-    // Mouth position: roughly head-height, offset to whichever side the
-    // player is facing. Sprite faces LEFT by default, so when facing=-1 the
-    // mouth is on the left; when facing=1 the renderer flips horizontally
-    // and the mouth ends up on the right.
-    const mouthSide = player.facing < 0 ? -1 : 1;
-    const mouthX = player.x + player.width / 2 + mouthSide * (player.width * 0.55);
-    const mouthY = player.y + player.height * 0.25;
+    // Compute the shot angle. 0 = straight up; positive = rightward tilt.
+    let shootAngle = 0;
+    if (tapX !== undefined) {
+      const playerCx = player.x + player.width / 2;
+      const dx = tapX - playerCx;
+      // Map horizontal distance to angle, clamped to ±AIM_SHOOT_MAX_ANGLE.
+      // 80px sideways = max tilt.
+      const k = Math.max(-1, Math.min(1, dx / 80));
+      shootAngle = k * AIM_SHOOT_MAX_ANGLE;
+    }
+
+    // The trunk pivots from inside the head. Must stay in sync with
+    // drawHeadAndTrunk() in gameRenderer.ts.
+    //   headCY (local) = -player.height * 1.05
+    //   headR          = player.width * 0.36
+    //   pivot (local)  = (0, headCY + headR * 0.1)
+    // In world coordinates the local origin is at (x + w/2, y + h).
+    const headR = player.width * 0.36;
+    const pivotX = player.x + player.width / 2;
+    const pivotY = player.y + player.height * (1 - 1.05) + headR * 0.1;
+    // Bullet spawns at trunk tip: baseStart (headR*0.45) + trunkLen (17).
+    const barrelLen = headR * 0.45 + 17;
+    // angle=0 → straight up (-Y in screen space); positive → tilted right (+X).
+    const dirX = Math.sin(shootAngle);
+    const dirY = -Math.cos(shootAngle);
+    const tipX = pivotX + dirX * barrelLen;
+    const tipY = pivotY + dirY * barrelLen;
 
     bulletsRef.current.push({
-      x: mouthX,
-      y: mouthY,
-      vy: -11,
+      x: tipX,
+      y: tipY,
+      vx: dirX * BULLET_SPEED,
+      vy: dirY * BULLET_SPEED,
     });
 
-    // Muzzle-flash particles
-    for (let i = 0; i < 6; i++) {
-      const ang = (Math.random() - 0.5) * 0.8 + (mouthSide < 0 ? Math.PI : 0);
-      const sp = 1.5 + Math.random() * 2;
+    // Muzzle-flash particles (sprayed in the firing direction)
+    for (let i = 0; i < 8; i++) {
+      const spread = (Math.random() - 0.5) * 0.6;
+      const muzzleAng = Math.atan2(dirY, dirX) + spread;
+      const sp = 2 + Math.random() * 2;
       particlesRef.current.push({
-        x: mouthX + mouthSide * 4,
-        y: mouthY,
-        vx: Math.cos(ang) * sp,
-        vy: Math.sin(ang) * sp,
-        life: 14,
-        maxLife: 14,
-        size: 1.5 + Math.random() * 1.8,
-        color: i < 3 ? "rgba(255,230,120,0.95)" : "rgba(255,255,255,0.9)",
+        x: tipX + dirX * 2,
+        y: tipY + dirY * 2,
+        vx: Math.cos(muzzleAng) * sp,
+        vy: Math.sin(muzzleAng) * sp,
+        life: 16,
+        maxLife: 16,
+        size: 1.6 + Math.random() * 1.8,
+        color: i < 4 ? "rgba(255,230,120,0.95)" : "rgba(255,255,255,0.95)",
         gravity: 0,
         fade: true,
       });
     }
+
+    // Snap aim to the shoot angle so the barrel visually points the right way
+    // immediately. The lerp in the game loop will then ease it back toward
+    // the idle side-pose once SHOOT_POSE_MS has elapsed.
+    player.aimAngle = shootAngle;
+
     playShootSound();
   }, []);
 
